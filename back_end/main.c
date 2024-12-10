@@ -3,176 +3,229 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <sys/socket.h>
 #include <sys/select.h>
-#include <errno.h>
 
-#define PORT 55555
-#define MAX_CLIENTS 10
-#define BUFFER_SIZE 1024
+#define PORT 55555         // Port sur lequel le serveur écoute
+#define BUFFER_SIZE 1024   // Taille du buffer pour les messages
+#define MAX_CONNECTIONS 10 // Nombre maximum de connexions actives
 
-// Structure représentant un client dans la liste liée
-typedef struct ClientNode {
-    int socket;
-    struct ClientNode *next;
-} ClientNode;
+// Structure pour représenter un client dans une liste chaînée
+typedef struct client_node {
+    int socket; // Socket du client
+    struct client_node *next; // Pointeur vers le prochain client
+} client_node;
 
-// Fonction pour ajouter un client à la liste
-void add_client(ClientNode **head, int new_socket, int *client_count) {
-    if (*client_count >= MAX_CLIENTS) {
-        printf("Nombre maximum de clients atteint, rejet de la connexion : %d\n", new_socket);
-        close(new_socket);
-        return;
-    }
+client_node *head = NULL; // Tête de la liste des clients
 
-    ClientNode *new_node = (ClientNode *)malloc(sizeof(ClientNode));
-    if (!new_node) {
-        perror("Échec d'allocation de mémoire pour un nouveau client");
+// Variables globales pour le suivi des connexions
+int total_connections = 0; // Nombre total de connexions acceptées
+int active_connections = 0; // Nombre de connexions actuellement actives
+
+// Prototypes des fonctions
+int setup_server_socket();
+
+void run_server_loop(int server_socket);
+
+void handle_new_connection(int server_socket);
+
+void handle_client(const client_node *client);
+
+void add_client(int client_socket);
+
+void remove_client(int client_socket);
+
+client_node *find_client(int client_socket);
+
+// Fonction principale
+int main() {
+    const int server_socket = setup_server_socket(); // Configurer le socket serveur
+    printf("Serveur en écoute sur le port %d\n", PORT);
+
+    run_server_loop(server_socket); // Lancer la boucle principale
+    close(server_socket); // Fermer le socket principal
+    return 0;
+}
+
+// Configurer le socket serveur
+int setup_server_socket() {
+    int server_socket;
+    struct sockaddr_in server_addr;
+
+    // Créer un socket TCP
+    if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+        perror("Erreur lors de la création du socket");
         exit(EXIT_FAILURE);
     }
-    new_node->socket = new_socket;
-    new_node->next = *head;
-    *head = new_node;
-    (*client_count)++;
-    printf("Client ajouté, nombre total de clients : %d\n", *client_count);
-}
 
-// Fonction pour supprimer un client de la liste
-void remove_client(ClientNode **head, int socket, int *client_count) {
-    ClientNode *temp = *head, *prev = NULL;
-
-    while (temp != NULL && temp->socket != socket) {
-        prev = temp;
-        temp = temp->next;
-    }
-
-    if (temp == NULL) return;
-
-    if (prev == NULL) {
-        *head = temp->next;
-    } else {
-        prev->next = temp->next;
-    }
-
-    close(temp->socket);
-    free(temp);
-    (*client_count)--;
-    printf("Client supprimé, nombre total de clients : %d\n", *client_count);
-}
-
-// Fonction pour libérer toute la liste
-void free_list(ClientNode *head) {
-    ClientNode *temp;
-    while (head != NULL) {
-        temp = head;
-        head = head->next;
-        close(temp->socket);
-        free(temp);
-    }
-}
-
-int main() {
-    int server_socket, new_socket, max_sd, sd, activity, valread;
-    struct sockaddr_in address;
-    socklen_t addrlen = sizeof(address);
-    char buffer[BUFFER_SIZE];
-    ClientNode *clients = NULL; // Liste des clients
-    int client_count = 0;       // Compteur pour suivre le nombre de clients connectés
-
-    // Créer un socket serveur
-    if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        perror("Erreur lors de la création de la socket");
+    // Réutiliser l'adresse et le port immédiatement après fermeture
+    // Cette option permet de réutiliser l'adresse et le port immédiatement après la fermeture du socket,
+    // ce qui est utile pour éviter les erreurs "Address already in use" lors du redémarrage rapide du serveur.
+    int opt = 1;
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("Erreur avec setsockopt");
+        close(server_socket);
         exit(EXIT_FAILURE);
     }
 
     // Configurer l'adresse du serveur
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
+    server_addr.sin_family = AF_INET; // IPv4
+    server_addr.sin_addr.s_addr = INADDR_ANY; // Accepter des connexions depuis n'importe quelle IP
+    server_addr.sin_port = htons(PORT); // Convertir le port en format réseau
 
-    // Lier le socket à l'adresse et au port spécifiés
-    if (bind(server_socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("Échec du bind");
+    // Associer le socket à l'adresse et au port
+    if (bind(server_socket, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+        perror("Erreur avec bind");
         close(server_socket);
         exit(EXIT_FAILURE);
     }
 
-    // Le serveur écoute pour les connexions entrantes
-    if (listen(server_socket, 3) < 0) {
-        perror("Échec de listen");
+    // Mettre le socket en mode écoute
+    if (listen(server_socket, 10) < 0) {
+        perror("Erreur avec listen");
         close(server_socket);
         exit(EXIT_FAILURE);
     }
 
-    printf("Serveur en écoute sur le port %d\n", PORT);
+    return server_socket;
+}
 
-    fd_set readfds;
+// Ajouter un client à la liste chaînée
+void add_client(int client_socket) {
+    client_node *new_node = (client_node *) malloc(sizeof(client_node));
+    if (!new_node) {
+        perror("Erreur d'allocation mémoire pour un nouveau client");
+        return;
+    }
+    new_node->socket = client_socket; // Initialiser le socket du client
+    new_node->next = head; // Ajouter le nouveau client au début de la liste
+    head = new_node; // Mettre à jour la tête de la liste
+}
+
+// Retirer un client de la liste chaînée
+void remove_client(int client_socket) {
+    client_node **current = &head;
+    while (*current) {
+        client_node *entry = *current;
+        if (entry->socket == client_socket) {
+            *current = entry->next; // Supprimer le client de la liste
+            close(entry->socket); // Fermer le socket du client
+            free(entry); // Libérer la mémoire associée au client
+            active_connections--; // Mettre à jour les statistiques des connexions
+            printf("Client %d déconnecté et retiré de la liste. Connexions actives : %d\n",
+                   client_socket, active_connections);
+            return;
+        }
+        current = &entry->next; // Passer au client suivant
+    }
+}
+
+// Lancer la boucle principale du serveur
+void run_server_loop(int server_socket) {
+    fd_set read_fds;
+    int max_fd = server_socket; // Initialiser le max_fd
 
     while (1) {
-        // Réinitialiser le set de descripteurs de fichiers
-        FD_ZERO(&readfds);
+        FD_ZERO(&read_fds); // Réinitialiser l'ensemble des descripteurs
+        FD_SET(server_socket, &read_fds); // Ajouter le socket principal
 
-        // Ajouter le descripteur du serveur au set
-        FD_SET(server_socket, &readfds);
-        max_sd = server_socket;
-
-        // Ajouter les sockets clients au set
-        ClientNode *current = clients;
-        while (current != NULL) {
-            sd = current->socket;
-            if (sd > 0)
-                FD_SET(sd, &readfds);
-            if (sd > max_sd)
-                max_sd = sd;
+        // Ajouter tous les sockets des clients à l'ensemble
+        client_node *current = head;
+        while (current) {
+            FD_SET(current->socket, &read_fds);
+            if (current->socket > max_fd) {
+                max_fd = current->socket;
+            }
             current = current->next;
         }
 
-        // Attendre une activité sur un des sockets
-        activity = select(max_sd + 1, &readfds, NULL, NULL, NULL);
-
-        if ((activity < 0) && (errno != EINTR)) {
-            perror("Erreur de select");
+        // Attendre l'activité sur un descripteur
+        const int activity = select(max_fd + 1, &read_fds, NULL, NULL, NULL);
+        if (activity < 0) {
+            perror("Erreur avec select");
+            exit(EXIT_FAILURE);
         }
 
-        // Si le descripteur serveur est prêt, une nouvelle connexion arrive
-        if (FD_ISSET(server_socket, &readfds)) {
-            if ((new_socket = accept(server_socket, (struct sockaddr *)&address, &addrlen)) < 0) {
-                perror("Erreur d'acceptation");
-                exit(EXIT_FAILURE);
-            }
-
-            printf("Nouvelle connexion, socket fd: %d, IP: %s, Port: %d\n",
-                   new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
-
-            add_client(&clients, new_socket, &client_count);
+        // Vérifier si une nouvelle connexion est en attente
+        if (FD_ISSET(server_socket, &read_fds)) {
+            handle_new_connection(server_socket);
         }
 
-        // Sinon, c'est un message d'un client existant
-        current = clients;
-        while (current != NULL) {
-            sd = current->socket;
-
-            if (FD_ISSET(sd, &readfds)) {
-                if ((valread = read(sd, buffer, BUFFER_SIZE)) == 0) {
-                    // Le client a fermé la connexion
-                    getpeername(sd, (struct sockaddr *)&address, &addrlen);
-                    printf("Client déconnecté, IP: %s, Port: %d\n",
-                           inet_ntoa(address.sin_addr), ntohs(address.sin_port));
-
-                    remove_client(&clients, sd, &client_count);
-                } else {
-                    // Envoyer le message reçu
-                    buffer[valread] = '\0';
-                    printf("Message reçu: %s\n", buffer);
-                    send(sd, buffer, strlen(buffer), 0);
-                }
+        // Vérifier l'activité sur les sockets des clients
+        current = head;
+        while (current) {
+            client_node *next = current->next; // Sauvegarder le pointeur suivant
+            if (FD_ISSET(current->socket, &read_fds)) {
+                handle_client(current);
             }
-
-            current = current->next;
+            current = next;
         }
     }
+}
 
-    free_list(clients);
-    close(server_socket);
-    return 0;
+// Gérer une nouvelle connexion
+void handle_new_connection(int server_socket) {
+    struct sockaddr_in client_addr;
+    socklen_t addrlen = sizeof(client_addr);
+
+    int client_socket = accept(server_socket, (struct sockaddr *) &client_addr, &addrlen);
+    if (client_socket < 0) {
+        perror("Erreur avec accept");
+        return;
+    }
+
+    // Vérifier si le nombre maximum de connexions actives est atteint
+    if (active_connections >= MAX_CONNECTIONS) {
+        const char *refus_message = "SERVER_CLOSE: Connexion refusée : Limite atteinte.";
+        send(client_socket, refus_message, strlen(refus_message), 0); // Envoyer le message d'erreur explicite
+        printf("Connexion refusée : socket %d (IP: %s, PORT: %hu). Limite atteinte.\n",
+               client_socket,
+               inet_ntoa(client_addr.sin_addr),
+               ntohs(client_addr.sin_port));
+        close(client_socket); // Fermer la connexion proprement
+        return;
+    }
+
+    // Mettre à jour les statistiques des connexions
+    total_connections++;
+    active_connections++;
+
+    // Le spécificateur de format %hu est utilisé pour afficher une valeur de type unsigned short en C.
+    printf(
+        "Nouvelle connexion acceptée : socket %d (IP: %s, PORT: %hu). Connexions actives : %d/%d, Total connexions : %d\n",
+        client_socket,
+        inet_ntoa(client_addr.sin_addr),
+        ntohs(client_addr.sin_port),
+        active_connections,
+        MAX_CONNECTIONS,
+        total_connections
+    );
+
+    add_client(client_socket); // Ajouter le client à la liste chaînée
+}
+
+// Gérer la communication avec un client
+void handle_client(const client_node *client) {
+    char buffer[BUFFER_SIZE];
+    const ssize_t bytes_read = recv(client->socket, buffer, sizeof(buffer), 0);
+
+    if (bytes_read > 0) {
+        // Si des données sont reçues (bytes_read > 0),
+        // elles sont terminées correctement en ajoutant un caractère nul (\0) à la fin du buffer.
+        // Le message reçu est affiché, puis renvoyé au client.
+        buffer[bytes_read] = '\0'; // Terminer correctement la chaîne de caractères
+        printf("Message reçu de %d : %s\n", client->socket, buffer); // Afficher le message reçu
+        send(client->socket, buffer, bytes_read, 0); // Répondre avec le même message
+
+        if (strcmp(buffer, "quit") == 0) {
+            remove_client(client->socket);
+        }
+    } else if (bytes_read == 0) {
+        // Si le client se déconnecte proprement (bytes_read == 0), un message de déconnexion est affiché,
+        printf("Client %d déconnecté.\n", client->socket);
+        remove_client(client->socket);
+    } else {
+        // En cas d'erreur de réception (bytes_read < 0), un message d'erreur est affiché,
+        perror("Erreur lors de la réception.");
+        remove_client(client->socket);
+    }
 }
