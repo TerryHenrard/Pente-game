@@ -1,45 +1,56 @@
 import socket
 
-# Configuration
-SERVER_HOST = "127.0.0.1"  # Adresse IP du serveur
-SERVER_PORT = 55555        # Port du serveur
+import select
+
+# Configuration du serveur
+HOST = '127.0.0.1'  # Adresse IP du serveur (localhost)
+PORT = 55555  # Port du serveur
+
+
+def connect_to_server(host, port):
+    ws = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    ws.connect((host, port))
+    print("Connecté au serveur.")
+    return ws
+
+
+def handle_server_response(ws):
+    ready_to_read, _, _ = select.select([ws], [], [], 0.1)
+    if ws in ready_to_read:
+        data = ws.recv(1024)
+
+        if not data:
+            print("Connexion fermée par le serveur.")
+            return False
+
+        response = data.decode()
+        print(f"Réponse du serveur : {response}")
+
+        if response.startswith("SERVER_CLOSE"):
+            print("Le serveur a fermé la connexion : Limite atteinte.")
+            return False
+
+    return True
+
 
 def main():
     try:
-        # Création de la socket
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print("Socket créée.")
+        with connect_to_server(HOST, PORT) as ws:
+            while True:
+                if not handle_server_response(ws):
+                    break
 
-        # Connexion au serveur
-        client_socket.connect((SERVER_HOST, SERVER_PORT))
-        print(f"Connecté au serveur {SERVER_HOST}:{SERVER_PORT}")
+                message = input("Entrez un message ('quit' pour quitter) : ")
+                ws.sendall(message.encode())
 
-        while True:
-            # Lecture de la chaîne de l'utilisateur
-            message = input("Entrez un message (ou 'quit' pour quitter) : ")
-
-            if message.lower() == "quit":
-                print("Fermeture de la connexion...")
-                client_socket.close()
-                break
-
-            # Envoi de la chaîne au serveur
-            client_socket.sendall(message.encode())
-
-            # Lecture de la réponse du serveur
-            response = client_socket.recv(1024).decode()
-            print(f"Réponse du serveur : {response}")
-
-    except ConnectionError as e:
-        print(f"Erreur de connexion : {e}")
+                if message.lower() == "quit":
+                    print("Déconnexion.")
+                    break
     except Exception as e:
         print(f"Une erreur est survenue : {e}")
     finally:
-        try:
-            client_socket.close()
-        except:
-            pass
         print("Connexion fermée.")
+
 
 if __name__ == "__main__":
     main()
