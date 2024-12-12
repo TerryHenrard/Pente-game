@@ -2,10 +2,10 @@
 <project version="4">
   <component name="PublishConfigData" autoUpload="Always" remoteFilesAllowedToDisappearOnAutoupload="false" autoUploadExternalChanges="true">
     <serverData>
-      <paths name="Remote Host (cb38083f-f41f-4c7a-90f7-627ebab64dd0)">
+      <paths name="debian (e07b7f39-0a59-491e-9917-a6ad562a75ed)">
         <serverdata>
           <mappings>
-            <mapping deploy="/tmp/tmp.c2z9JdaxUC" local="$PROJECT_DIR$" />
+            <mapping deploy="/tmp/tmp.zBkMGxlcfD" local="$PROJECT_DIR$" />
           </mappings>
           <excludedPaths>
             <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug" />
