@@ -12,6 +12,8 @@
 // Structure pour représenter un client dans une liste chaînée
 typedef struct client_node {
     int socket; // Socket du client
+    char recv_buffer[BUFFER_SIZE]; // Buffer de réception
+    char send_buffer[BUFFER_SIZE]; // Buffer d'envoi
     struct client_node *next; // Pointeur vers le prochain client
 } client_node;
 
@@ -28,13 +30,17 @@ void run_server_loop(int server_socket);
 
 void handle_new_connection(int server_socket);
 
-void handle_client(const client_node *client);
+void handle_client(client_node *client);
 
 void add_client(int client_socket);
 
-void remove_client(int client_socket);
+void close_connection(int client_socket);
 
 client_node *find_client(int client_socket);
+
+void process_cmd(client_node *client, const char *command);
+
+void send_packet(client_node *client);
 
 // Fonction principale
 int main() {
@@ -102,7 +108,7 @@ void add_client(int client_socket) {
 }
 
 // Retirer un client de la liste chaînée
-void remove_client(int client_socket) {
+void close_connection(int client_socket) {
     client_node **current = &head;
     while (*current) {
         client_node *entry = *current;
@@ -111,8 +117,11 @@ void remove_client(int client_socket) {
             close(entry->socket); // Fermer le socket du client
             free(entry); // Libérer la mémoire associée au client
             active_connections--; // Mettre à jour les statistiques des connexions
-            printf("Client %d déconnecté et retiré de la liste. Connexions actives : %d\n",
-                   client_socket, active_connections);
+            printf(
+                "Client %d déconnecté et retiré de la liste. Connexions actives : %d\n",
+                client_socket,
+                active_connections
+            );
             return;
         }
         current = &entry->next; // Passer au client suivant
@@ -177,10 +186,12 @@ void handle_new_connection(int server_socket) {
     if (active_connections >= MAX_CONNECTIONS) {
         const char *refus_message = "SERVER_CLOSE: Connexion refusée : Limite atteinte.";
         send(client_socket, refus_message, strlen(refus_message), 0); // Envoyer le message d'erreur explicite
-        printf("Connexion refusée : socket %d (IP: %s, PORT: %hu). Limite atteinte.\n",
-               client_socket,
-               inet_ntoa(client_addr.sin_addr),
-               ntohs(client_addr.sin_port));
+        printf(
+            "Connexion refusée : socket %d (IP: %s, PORT: %hu). Limite atteinte.\n",
+            client_socket,
+            inet_ntoa(client_addr.sin_addr),
+            ntohs(client_addr.sin_port)
+        );
         close(client_socket); // Fermer la connexion proprement
         return;
     }
@@ -204,28 +215,43 @@ void handle_new_connection(int server_socket) {
 }
 
 // Gérer la communication avec un client
-void handle_client(const client_node *client) {
+void handle_client(client_node *client) {
     char buffer[BUFFER_SIZE];
-    const ssize_t bytes_read = recv(client->socket, buffer, sizeof(buffer), 0);
+    const ssize_t bytes_read = recv(client->socket, buffer, sizeof(buffer) - 1, 0);
 
     if (bytes_read > 0) {
-        // Si des données sont reçues (bytes_read > 0),
-        // elles sont terminées correctement en ajoutant un caractère nul (\0) à la fin du buffer.
-        // Le message reçu est affiché, puis renvoyé au client.
-        buffer[bytes_read] = '\0'; // Terminer correctement la chaîne de caractères
-        printf("Message reçu de %d : %s\n", client->socket, buffer); // Afficher le message reçu
-        send(client->socket, buffer, bytes_read, 0); // Répondre avec le même message
-
-        if (strcmp(buffer, "quit") == 0) {
-            remove_client(client->socket);
-        }
+        buffer[bytes_read] = '\0'; // Terminer correctement la chaîne
+        printf("Message reçu de %d : %s\n", client->socket, buffer);
+        process_cmd(client, buffer); // Traiter la commande
     } else if (bytes_read == 0) {
-        // Si le client se déconnecte proprement (bytes_read == 0), un message de déconnexion est affiché,
         printf("Client %d déconnecté.\n", client->socket);
-        remove_client(client->socket);
+        close_connection(client->socket);
     } else {
-        // En cas d'erreur de réception (bytes_read < 0), un message d'erreur est affiché,
-        perror("Erreur lors de la réception.");
-        remove_client(client->socket);
+        perror("Erreur lors de la réception");
+        close_connection(client->socket);
+    }
+}
+
+void process_cmd(client_node *client, const char *command) {
+    printf("Traitement de la commande : %s\n", command);
+
+    // Exemple de commandes
+    if (strcasecmp(command, "HELLO") == 0) {
+        snprintf(client->send_buffer, BUFFER_SIZE, "SERVER: Hello, client %d!\n", client->socket);
+    } else if (strcasecmp(command, "QUIT") == 0) {
+        snprintf(client->send_buffer, BUFFER_SIZE, "SERVER: Bye, client %d!\n", client->socket);
+        close_connection(client->socket);
+        return;
+    } else {
+        snprintf(client->send_buffer, BUFFER_SIZE, "SERVER: Commande inconnue : %s\n", command);
+    }
+
+    send(client->socket, client->send_buffer, strlen(client->send_buffer), 0);
+}
+
+void send_packet(client_node *client) {
+    if (strlen(client->send_buffer) > 0) {
+        send(client->socket, client->send_buffer, strlen(client->send_buffer), 0);
+        memset(client->send_buffer, 0, BUFFER_SIZE); // Nettoyer le buffer après envoi
     }
 }
