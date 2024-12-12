@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include <fcntl.h>
 
 #define PORT 55555         // Port sur lequel le serveur écoute
 #define BUFFER_SIZE 1024   // Taille du buffer pour les messages
@@ -70,6 +71,18 @@ int setup_server_socket() {
     if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         perror("Erreur avec setsockopt");
         close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    // Mettre le socket en mode non bloquant
+    int flags = fcntl(server_socket, F_GETFL, 0);
+    if (flags == -1) {
+        perror("Erreur fcntl F_GETFL");
+        exit(EXIT_FAILURE);
+    }
+
+    if (fcntl(server_socket, F_SETFL, flags | O_NONBLOCK) == -1) {
+        perror("Erreur fcntl F_SETFL");
         exit(EXIT_FAILURE);
     }
 
