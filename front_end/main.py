@@ -20,7 +20,6 @@ def receive_json(s):
     try:
         data = s.recv(BUFFER_SIZE).decode()
         if not data:
-            print("Connexion fermée par le serveur")
             return None
         return json.loads(data)
     except json.JSONDecodeError as e:
@@ -43,7 +42,7 @@ def handle_server_response(s):
     Vérifie et traite la réponse du serveur de manière non bloquante.
 
     Args:
-        s socket: Socket connectée au serveur.
+        s socket: Socket connecté au serveur.
     Returns:
         bool: True si la connexion reste active, False en cas d'erreur.
     """
@@ -54,16 +53,17 @@ def handle_server_response(s):
         # Vérifier s'il y a des données à lire
         if s in ready_to_read:
             # Recevoir et décoder les données
-            response = receive_json(s)
-
-            # Gérer les différents cas de réception
-            if not response:
-                print("Connexion fermée par le serveur.")
-                return False
+            response_json = receive_json(s)
 
             # Afficher la réponse de manière lisible
             print("Réponse du serveur :")
-            print(json.dumps(response, indent=4))
+            print(json.dumps(response_json, indent=4))
+
+            # Gérer les différents cas de réception
+            if not response_json or response_json.get("type") == "disconnect_ack":
+                print("Connexion fermée par le serveur.")
+                return False
+
             return True
 
         # Aucune donnée disponible actuellement
@@ -83,7 +83,24 @@ def handle_server_response(s):
 
 def create_auth_json(username, password):
     try:
-        return json.dumps({"type": "auth", "username": username, "password": password})
+        return json.dumps({
+            "type": "auth",
+            "username": username,
+            "password": password
+        })
+    except Exception as e:
+        print(f"Erreur lors de l'envoi du message : {e}")
+        return None
+
+
+def create_new_account(username, password, conf_password):
+    try:
+        return json.dumps({
+            "type": "new_account",
+            "username": username,
+            "password": password,
+            "conf_password": conf_password
+        })
     except Exception as e:
         print(f"Erreur lors de l'envoi du message : {e}")
         return None
@@ -91,7 +108,41 @@ def create_auth_json(username, password):
 
 def create_deconnection_json():
     try:
-        return json.dumps({"type": "disconnect"})
+        return json.dumps({
+            "type": "disconnect"
+        })
+    except Exception as e:
+        print(f"Erreur lors de l'envoi du message : {e}")
+        return None
+
+
+def create_get_lobby_json():
+    try:
+        return json.dumps({
+            "type": "get_lobby"
+        })
+    except Exception as e:
+        print(f"Erreur lors de l'envoi du message : {e}")
+        return None
+
+
+def create_join_game_json(game_name):
+    try:
+        return json.dumps({
+            "type": "join_game",
+            "game_name": game_name
+        })
+    except Exception as e:
+        print(f"Erreur lors de l'envoi du message : {e}")
+        return None
+
+
+def create_new_game_json(game_name):
+    try:
+        return json.dumps({
+            "type": "create_game",
+            "game_name": game_name
+        })
     except Exception as e:
         print(f"Erreur lors de l'envoi du message : {e}")
         return None
@@ -104,23 +155,51 @@ def handle_authentication_choice():
     return create_auth_json(username, password)
 
 
-def handle_deconnection_choice():
-    return create_deconnection_json()
+def handle_create_new_account():
+    username = input("Entrez votre nom d'utilisateur :")
+    password = input("Entrez votre mot de passe :")
+    conf_password = input("Confirmez votre mot de passe :")
+
+    return create_new_account(username, password, conf_password)
+
+
+def handle_create_new_game():
+    game_name = input("Entrez le nom de la partie à créer : ")
+
+    return create_new_game_json(game_name)
+
+
+def handle_join_game():
+    game_name = input("Entrez le nom de la partie à rejoidre : ")
+
+    return create_join_game_json(game_name)
 
 
 def handle_message_choice(choice):
     if choice == "1":
         return handle_authentication_choice()
     elif choice == "2":
-        return handle_deconnection_choice()
+        return handle_create_new_account()
+    elif choice == "3":
+        return create_get_lobby_json()
+    elif choice == "4":
+        return handle_create_new_game()
+    elif choice == "5":
+        return handle_join_game()
+    elif choice == "6":
+        return create_deconnection_json()
     else:
         print("Choix invalide.")
-        return None
+        return json.dumps({"type": "invalid_choice"})
 
 
 def display_choices():
     print("1. Se connecter")
-    print("2. Quitter")
+    print("2. Créer un nouveau compte")
+    print("3. Afficher le lobby")
+    print("4. Créer une nouvelle partie")
+    print("5. Rejoinde une partie")
+    print("6. Quitter")
 
 
 def get_choice():
@@ -139,6 +218,7 @@ def main():
                 json_message = get_choice()
                 if not json_message:
                     continue
+
                 send_json(s, json_message)
 
     except Exception as e:
