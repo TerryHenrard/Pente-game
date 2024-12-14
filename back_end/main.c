@@ -1,5 +1,3 @@
-// TODO: Implémenter les fonctions qui gèrent les requêtes comme celle pour l'authentification
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +5,7 @@
 #include <arpa/inet.h>
 #include <sys/select.h>
 #include <fcntl.h>
+#include <time.h>
 
 #include "cJSON.h"                      // Bibliothèque pour manipuler des objets JSON
 
@@ -59,8 +58,8 @@ client_node *head_linked_list_client = NULL; // Tête de la liste des clients
 typedef struct game_node {
     int id;
     char name[50];
-    char player1_name[50];
-    char player2_name[50];
+    client_node *player1;
+    client_node *player2;
     game_status status; // "waiting" or "ongoing"
     struct game_node *next;
 } game_node;
@@ -81,15 +80,17 @@ void handle_client(client_node *client);
 
 void print_client_list();
 
-const game_node *find_game_by_name(const char *game_name);
+game_node *find_game_by_name(const char *game_name);
 
 void add_client_to_list(int client_socket);
 
 int remove_client_from_list(int client_socket);
 
-game_node *add_game_to_list(const cJSON *json);
+game_node *add_game_to_list(const cJSON *json, client_node *client);
 
 int remove_game_from_list(int game_id);
+
+void print_game_list();
 
 void process_cmd(client_node *client, const char *command);
 
@@ -117,6 +118,12 @@ cJSON *create_join_game_response_failure();
 
 cJSON *create_unknow_response();
 
+cJSON *create_game_over_victory_response(const client_node *winner);
+
+cJSON *create_game_over_defeat_response(const client_node *loser);
+
+cJSON *create_player_stat_json(const player_stat *player_stats);
+
 void handle_response_type(client_node *client, const char *request_type, const cJSON *json);
 
 char *handle_auth_response(const cJSON *json, client_node *client);
@@ -127,9 +134,15 @@ char *handle_get_lobby_response();
 
 char *handle_disconnect_response();
 
-char *handle_create_game_response(const cJSON *json);
+char *handle_create_game_response(const cJSON *json, client_node *client);
 
-char *handle_join_game_response();
+char *handle_join_game_response(const cJSON *json, client_node *client);
+
+int add_client_to_game(game_node *game, client_node *client);
+
+void finish_game(game_node *game);
+
+void complete_client_node(client_node *client, const cJSON *json);
 
 // Fonction principale
 int main() {
@@ -202,7 +215,7 @@ void print_client_list() {
     printf("Client list:\n");
     while (current) {
         printf(
-            "%d .Client name=%s, is_authenticated%s\n",
+            "%d .Client name=%s, is_authenticated=%s\n",
             i++,
             current->username,
             current->is_authenticated ? "true" : "false"
@@ -211,8 +224,8 @@ void print_client_list() {
     }
 }
 
-const game_node *find_game_by_name(const char *game_name) {
-    const game_node *current = head_linked_list_game;
+game_node *find_game_by_name(const char *game_name) {
+    game_node *current = head_linked_list_game;
 
     while (
         current &&
@@ -236,6 +249,12 @@ void add_client_to_list(const int client_socket) {
     new_node->socket = client_socket; // Initialiser le socket du client
     new_node->next = head_linked_list_client; // Ajouter le nouveau client au début de la liste
     head_linked_list_client = new_node; // Mettre à jour la tête de la liste
+
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddStringToObject(response, "type", "welcome");
+    cJSON_AddStringToObject(response, "message", "Bienvenue sur le serveur de jeu multijoueur !");
+    snprintf(new_node->send_buffer, BUFFER_SIZE, "%s", cJSON_Print(response));
+    send_packet(new_node); // Envoyer un message de bienvenue au client
 }
 
 int remove_client_from_list(const int client_socket) {
@@ -245,6 +264,11 @@ int remove_client_from_list(const int client_socket) {
         if (entry->socket == client_socket) {
             *current = entry->next; // Supprimer le client de la liste
             free(entry); // Libérer la mémoire associée au client
+
+            if (*current == NULL) {
+                head_linked_list_client = NULL; // Si la liste est vide, assigner NULL à la tête
+            }
+
             return 1; // Client trouvé et supprimé
         }
         current = &entry->next; // Passer au client suivant
@@ -252,46 +276,51 @@ int remove_client_from_list(const int client_socket) {
     return 0; // Client non trouvé
 }
 
-game_node *add_game_to_list(const cJSON *json) {
-    game_node *new_node = malloc(sizeof(game_node));
-    if (!new_node) {
+game_node *add_game_to_list(const cJSON *json, client_node *client) {
+    game_node *new_game_node = malloc(sizeof(game_node));
+    if (!new_game_node) {
         perror("Memory allocation error\n");
         return NULL;
     }
 
-    const cJSON *id = cJSON_GetObjectItemCaseSensitive(json, "id");
-    const cJSON *player1 = cJSON_GetObjectItemCaseSensitive(json, "player1");
-    const cJSON *player2 = cJSON_GetObjectItemCaseSensitive(json, "player2");
-    const cJSON *status = cJSON_GetObjectItemCaseSensitive(json, "status");
-
-    if (
-        !cJSON_IsNumber(id) || id == NULL ||
-        !cJSON_IsString(player1) || player1 == NULL ||
-        !cJSON_IsString(player2) || player2 == NULL ||
-        !cJSON_IsString(status) || status == NULL
-    ) {
+    const cJSON *game_name = cJSON_GetObjectItemCaseSensitive(json, "game_name");
+    if (!cJSON_IsString(game_name) || game_name == NULL) {
         perror("Invalid JSON format\n");
-        free(new_node);
+        free(new_game_node);
         return NULL;
     }
 
-    new_node->id = id->valueint;
-    strncpy(new_node->player1_name, player1->valuestring, sizeof(new_node->player1_name) - 1);
-    strncpy(new_node->player2_name, player2->valuestring, sizeof(new_node->player2_name) - 1);
-    new_node->status = strcmp(status->valuestring, "waiting") == 0 ? waiting : ongoing;
-    new_node->next = head_linked_list_game;
-    head_linked_list_game = new_node;
+    new_game_node->player1 = client;
+    new_game_node->id = 1;
+    strncpy(new_game_node->player1->username, client->username, sizeof(new_game_node->player1->username) - 1);
+    strncpy(new_game_node->name, game_name->valuestring, sizeof(new_game_node->name) - 1);
+    new_game_node->status = waiting;
+    new_game_node->next = head_linked_list_game;
+    head_linked_list_game = new_game_node;
 
     printf(
-        "Game added: ID=%d, Player1=%s, Player2=%s, Status=%s\n",
-        new_node->id,
-        new_node->player1_name,
-        new_node->player2_name,
-        status->valuestring
+        "Game added: ID=%d, Game name: %s, Player1=%s, Status=%s\n",
+        new_game_node->id,
+        new_game_node->name,
+        new_game_node->player1->username,
+        "waiting"
     );
 
-    return new_node;
+    return new_game_node;
 }
+
+void validate_game_list() {
+    const game_node *current = head_linked_list_game;
+    while (current) {
+        if (!current->name || !current->player1) {
+            printf("Invalid game node detected!\n");
+            return;
+        }
+        current = current->next;
+    }
+    printf("Game list is valid.\n");
+}
+
 
 int remove_game_from_list(const int game_id) {
     game_node **current = &head_linked_list_game;
@@ -300,12 +329,43 @@ int remove_game_from_list(const int game_id) {
         if (entry->id == game_id) {
             *current = entry->next; // Remove the game from the list
             free(entry); // Free the memory associated with the game
+
+            // Vérification : Si la liste devient vide, mettre head à NULL
+            if (*current == NULL) {
+                head_linked_list_game = NULL;
+            }
+
             return 1; // Game found and removed
         }
         current = &entry->next; // Move to the next game
     }
     return 0; // Game not found
 }
+
+
+void print_game_list() {
+    const game_node *current = head_linked_list_game;
+    int i = 0;
+    printf("Game list:\n");
+    if (!current) {
+        // Si la liste est vide
+        printf("No games available.\n");
+        return;
+    }
+    while (current) {
+        printf(
+            "%d. Game ID=%d, Name=%s, Player1=%s, Player2=%s, Status=%s\n",
+            i++,
+            current->id,
+            current->name,
+            current->player1->username,
+            current->player2 ? current->player2->username : "Unknown",
+            current->status == waiting ? "waiting" : "ongoing"
+        );
+        current = current->next;
+    }
+}
+
 
 // Lancer la boucle principale du serveur
 void run_server_loop(const int server_socket) {
@@ -400,7 +460,6 @@ void handle_client(client_node *client) {
 
     if (bytes_read > 0) {
         command[bytes_read] = '\0'; // Terminer correctement la chaîne
-        printf("Message reçu de %d : %s\n", client->socket, command);
         process_cmd(client, command); // Traiter la commande
     } else if (bytes_read == 0) {
         printf("Client %d déconnecté.\n", client->socket);
@@ -416,12 +475,8 @@ cJSON *create_auth_response_success(const client_node *client) {
     cJSON_AddStringToObject(response, "type", "auth_response");
     cJSON_AddNumberToObject(response, "status", success);
 
-    cJSON *player_stats = cJSON_CreateObject();
+    cJSON *player_stats = create_player_stat_json(&client->player_stats);
     cJSON_AddItemToObject(response, "player_stats", player_stats);
-    cJSON_AddNumberToObject(player_stats, "score", client->player_stats.score);
-    cJSON_AddNumberToObject(player_stats, "wins", client->player_stats.wins);
-    cJSON_AddNumberToObject(player_stats, "losses", client->player_stats.losses);
-    cJSON_AddNumberToObject(player_stats, "games_played", client->player_stats.games_played);
 
     return response;
 }
@@ -464,30 +519,27 @@ cJSON *create_get_lobby_response() {
     cJSON_AddStringToObject(response, "status", "success");
 
     cJSON *games = cJSON_CreateArray();
+    const game_node *current_game = head_linked_list_game;
 
-    cJSON *game1 = cJSON_CreateObject();
-    cJSON_AddNumberToObject(game1, "id", 1);
-    cJSON_AddStringToObject(game1, "name", "Game 1");
-    cJSON_AddStringToObject(game1, "status", "waiting");
+    print_game_list();
+    while (current_game) {
+        printf("Game name: %s\n", current_game->name);
+        cJSON *game = cJSON_CreateObject();
+        cJSON_AddNumberToObject(game, "id", current_game->id);
+        cJSON_AddStringToObject(game, "name", current_game->name);
+        cJSON_AddStringToObject(game, "status", current_game->status == waiting ? "waiting" : "ongoing");
 
-    cJSON *players = cJSON_CreateArray();
-    cJSON_AddItemToArray(players, cJSON_CreateString("Player 1"));
+        cJSON *players = cJSON_CreateArray();
+        cJSON_AddItemToArray(players, cJSON_CreateString(current_game->player1->username));
+        if (current_game->player2) {
+            cJSON_AddItemToArray(players, cJSON_CreateString(current_game->player2->username));
+        }
 
-    cJSON_AddItemToObject(game1, "players", players);
+        cJSON_AddItemToObject(game, "players", players);
+        cJSON_AddItemToArray(games, game);
 
-    cJSON *game2 = cJSON_CreateObject();
-    cJSON_AddNumberToObject(game2, "id", 2);
-    cJSON_AddStringToObject(game2, "name", "Game 2");
-    cJSON_AddStringToObject(game2, "status", "in_progress");
-
-    cJSON *players2 = cJSON_CreateArray();
-    cJSON_AddItemToArray(players2, cJSON_CreateString("Player 2"));
-    cJSON_AddItemToArray(players2, cJSON_CreateString("Player 3"));
-
-    cJSON_AddItemToObject(game2, "players", players2);
-
-    cJSON_AddItemToArray(games, game1);
-    cJSON_AddItemToArray(games, game2);
+        current_game = current_game->next;
+    }
 
     cJSON_AddItemToObject(response, "games", games);
 
@@ -503,10 +555,10 @@ cJSON *create_game_response_success(const game_node *game) {
     cJSON_AddNumberToObject(game_obj, "id", 1);
     cJSON_AddStringToObject(game_obj, "name", game->name);
     cJSON_AddNumberToObject(game_obj, "status", game->status);
-    cJSON_AddStringToObject(game_obj, "host", game->player1_name);
+    cJSON_AddStringToObject(game_obj, "host", game->player1->username);
 
     cJSON *players = cJSON_CreateArray();
-    cJSON_AddItemToArray(players, cJSON_CreateString(game->player1_name));
+    cJSON_AddItemToArray(players, cJSON_CreateString(game->player1->username));
     cJSON_AddItemToObject(game_obj, "players", players);
 
     cJSON_AddItemToObject(response, "game", game_obj);
@@ -543,6 +595,38 @@ cJSON *create_unknow_response() {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "unknown_command");
     return response;
+}
+
+cJSON *create_game_over_victory_response(const client_node *winner) {
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddStringToObject(response, "type", "game_over");
+    cJSON_AddStringToObject(response, "status", "victory");
+
+    cJSON *player_stats = create_player_stat_json(&winner->player_stats);
+    cJSON_AddItemToObject(response, "player_stats", player_stats);
+
+    return response;
+}
+
+cJSON *create_game_over_defeat_response(const client_node *loser) {
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddStringToObject(response, "type", "game_over");
+    cJSON_AddStringToObject(response, "status", "defeat");
+
+    cJSON *player_stats = create_player_stat_json(&loser->player_stats);
+    cJSON_AddItemToObject(response, "player_stats", player_stats);
+
+    return response;
+}
+
+cJSON *create_player_stat_json(const player_stat *player_stats) {
+    cJSON *player_stats_json = cJSON_CreateObject();
+    cJSON_AddNumberToObject(player_stats_json, "score", player_stats->score);
+    cJSON_AddNumberToObject(player_stats_json, "wins", player_stats->wins);
+    cJSON_AddNumberToObject(player_stats_json, "losses", player_stats->losses);
+    cJSON_AddNumberToObject(player_stats_json, "games_played", player_stats->games_played);
+
+    return player_stats_json;
 }
 
 void complete_client_node(client_node *client, const cJSON *json) {
@@ -601,16 +685,16 @@ char *handle_auth_response(const cJSON *json, client_node *client) {
     return cJSON_Print(create_auth_response_success(client));
 }
 
-// TODO: Vérifier si le nom d'utilisateur est déjà pris
+// TODO: Vérifier si le nom d'utilisateur est déjà pris dans la db
 char *handle_new_account_response(const cJSON *json) {
     const cJSON *password = cJSON_GetObjectItemCaseSensitive(json, "password");
     const cJSON *conf_password = cJSON_GetObjectItemCaseSensitive(json, "conf_password");
 
-    if (!password || !conf_password) {
-        return cJSON_Print(create_new_account_response_failure());
-    }
-
-    if (strcasecmp(password->valuestring, conf_password->valuestring) != 0) {
+    if (
+        !password ||
+        !conf_password ||
+        strcmp(password->valuestring, conf_password->valuestring) != 0
+    ) {
         return cJSON_Print(create_new_account_response_failure());
     }
 
@@ -629,26 +713,116 @@ char *handle_disconnect_response() {
     return response_string;
 }
 
-char *handle_create_game_response(const cJSON *json) {
+char *handle_create_game_response(const cJSON *json, client_node *client) {
     const char *game_name = cJSON_GetObjectItemCaseSensitive(json, "game_name")->valuestring;
     if (find_game_by_name(game_name)) {
+        printf("Game already exists\n");
         return cJSON_Print(create_game_response_failure());
     }
 
-    const game_node *game = add_game_to_list(json);
+    const game_node *game = add_game_to_list(json, client);
     if (!game) {
+        printf("Error creating game\n");
         return cJSON_Print(create_game_response_failure());
     }
 
+    print_game_list();
     return cJSON_Print(create_game_response_success(game));
 }
 
-char *handle_join_game_response(const cJSON *json) {
+void print_game_info(const game_node *game) {
+    if (!game) {
+        printf("Erreur : le pointeur de la partie est nul.\n");
+        return;
+    }
+
+    printf("Informations de la partie:\n");
+    printf("ID: %d\n", game->id);
+    printf("Nom: %s\n", game->name ? game->name : "Inconnu");
+
+    if (game->player1) {
+        printf("Joueur 1: %s\n", game->player1->username);
+    } else {
+        printf("Joueur 1: Inconnu\n");
+    }
+
+    if (game->player2) {
+        printf("Joueur 2: %s\n", game->player2->username);
+    } else {
+        printf("Joueur 2: Inconnu\n");
+    }
+
+    printf("Statut: %s\n", game->status == waiting ? "En attente" : "En cours");
+}
+
+int add_client_to_game(game_node *game, client_node *client) {
+    if (
+        !game ||
+        !client ||
+        game->status == ongoing
+    ) {
+        return 0; // Retourner une erreur si game ou client est nul ou si la partie est déjà en cours
+    }
+
+    if (!game->player1) {
+        printf("Adding player %s to the game\n", client->username);
+        game->player1 = client;
+    } else if (!game->player2) {
+        printf("Adding player %s to the game\n", client->username);
+        game->player2 = client;
+    } else {
+        return 0; // La partie est déjà pleine
+    }
+
+    return 1; // Client ajouté avec succès
+}
+
+void finish_game(game_node *game) {
+    // Choisir au hasard le gagnant et le perdant
+    srandom(time(NULL));
+    client_node *winner = random() % 2 == 0 ? game->player1 : game->player2;
+    client_node *loser = winner == game->player1 ? game->player2 : game->player1;
+    printf("Winner: %s, Loser: %s\n", winner->username, loser->username);
+
+    // Mettre à jour les scores
+    winner->player_stats.wins++;
+    winner->player_stats.score += 100;
+    winner->player_stats.games_played++;
+    loser->player_stats.losses++;
+    loser->player_stats.score -= 100;
+    loser->player_stats.games_played++;
+
+    // Écrire dans les buffers d'envoi
+    char *victory_response = cJSON_Print(create_game_over_victory_response(winner));
+    char *defeat_response = cJSON_Print(create_game_over_defeat_response(loser));
+    snprintf(winner->send_buffer, BUFFER_SIZE, "%s", victory_response);
+    snprintf(loser->send_buffer, BUFFER_SIZE, "%s", defeat_response);
+    free(victory_response);
+    free(defeat_response);
+
+    // Envoyer les paquets
+    send_packet(winner);
+    send_packet(loser);
+
+    // Retirer la partie de la liste chaînée
+    remove_game_from_list(game->id);
+}
+
+char *handle_join_game_response(const cJSON *json, client_node *client) {
     const char *game_name = cJSON_GetObjectItemCaseSensitive(json, "game_name")->valuestring;
-    if (find_game_by_name(game_name)) {
+    game_node *game = find_game_by_name(game_name);
+    if (!game) {
+        printf("Game not found\n");
         return cJSON_Print(create_join_game_response_failure());
     }
 
+    if (add_client_to_game(game, client) != 1) {
+        printf("Game is full or already started\n");
+        return cJSON_Print(create_join_game_response_failure());
+    }
+
+    print_game_list();
+    finish_game(game);
     return cJSON_Print(create_join_game_response_success());
 }
 
@@ -664,9 +838,9 @@ void handle_response_type(client_node *client, const char *request_type, const c
     } else if (strcmp(request_type, DISCONNECT_VERB) == 0) {
         response_string = handle_disconnect_response();
     } else if (strcasecmp(request_type, CREATE_GAME_VERB) == 0) {
-        response_string = handle_create_game_response(json);
+        response_string = handle_create_game_response(json, client);
     } else if (strcasecmp(request_type, JOIN_GAME_VERB) == 0) {
-        response_string = handle_join_game_response(json);
+        response_string = handle_join_game_response(json, client);
     } else {
         response_string = cJSON_Print(create_unknow_response());
     }
@@ -678,19 +852,17 @@ void handle_response_type(client_node *client, const char *request_type, const c
 }
 
 void process_cmd(client_node *client, const char *command) {
-    printf("Traitement de la commande : %s\n", command);
-
     // Parser la chaîne JSON
     cJSON *json = cJSON_Parse(command);
     if (json == NULL) {
         snprintf(client->send_buffer, BUFFER_SIZE, "%s", cJSON_Print(create_unknow_response()));
-        send(client->socket, client->send_buffer, strlen(client->send_buffer), 0);
+        send_packet(client);
         return;
     }
 
     // Afficher le JSON reçu
     char *json_string = cJSON_Print(json);
-    printf("JSON reçu:\n%s\n", json_string);
+    printf("JSON reçu de %s:\n%s\n", client->username, json_string);
     free(json_string);
 
     // Récupérer la valeur de la clé "type"
@@ -699,8 +871,9 @@ void process_cmd(client_node *client, const char *command) {
         !cJSON_IsString(type) ||
         type->valuestring == NULL
     ) {
+        printf("Type de requête inconnu\n");
         snprintf(client->send_buffer, BUFFER_SIZE, "%s", cJSON_Print(create_unknow_response()));
-        send(client->socket, client->send_buffer, strlen(client->send_buffer), 0);
+        send_packet(client);
         cJSON_Delete(json);
         return;
     }
@@ -710,7 +883,7 @@ void process_cmd(client_node *client, const char *command) {
 
     // Envoyer la réponse au client
     printf("Réponse SERVEUR:\n%s\n", client->send_buffer);
-    send(client->socket, client->send_buffer, strlen(client->send_buffer), 0);
+    send_packet(client);
 
     // Ferme la connexion si le type est "disconnect"
     if (strcmp(type->valuestring, "disconnect") == 0) {
@@ -723,6 +896,7 @@ void process_cmd(client_node *client, const char *command) {
 
 void send_packet(client_node *client) {
     if (strlen(client->send_buffer) > 0) {
+        printf("Envoie du paquet à %s\n", client->username);
         send(client->socket, client->send_buffer, strlen(client->send_buffer), 0);
         memset(client->send_buffer, 0, BUFFER_SIZE); // Nettoyer le buffer après envoi
     }

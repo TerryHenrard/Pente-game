@@ -41,10 +41,10 @@ def handle_server_response(s):
     """
     Vérifie et traite la réponse du serveur de manière non bloquante.
 
-    Args:
+    Args :
         s socket: Socket connecté au serveur.
-    Returns:
-        bool: True si la connexion reste active, False en cas d'erreur.
+    Returns :
+        bool : True si la connexion reste active, False en cas d'erreur.
     """
     try:
         # Utiliser select pour vérifier si des données sont disponibles sans bloquer
