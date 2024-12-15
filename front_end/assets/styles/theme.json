@@ -1,0 +1,77 @@
+{
+  "defaults": {
+    "font": {
+      "size": 16,
+      "bold": false,
+      "italic": false
+    },
+    "colours": {
+      "normal_bg": "#FFFFFF",
+      "hovered_bg": "#F5F5F5",
+      "disabled_bg": "#DDDDDD",
+      "normal_text": "#000000",
+      "hovered_text": "#000000",
+      "disabled_text": "#AAAAAA"
+    },
+    "border_width": 1,
+    "border_colour": "#AAAAAA",
+    "focus_border_colour": "#1E90FF"
+  },
+  "#login_title_label": {
+    "font": {
+      "size": 32,
+      "bold": true
+    }
+  },
+  "#new_account_title_label": {
+    "font": {
+      "size": 32,
+      "bold": true
+    }
+  },
+  "#error_label": {
+    "font": {
+      "size": 14
+    },
+    "colours": {
+      "normal_text": "#FF0000"
+    }
+  },
+  "button": {
+    "normal_text": "#FFFFFF",
+    "hovered_text": "#FFFFE0",
+    "normal_bg": "#1E90FF",
+    "hovered_bg": "#00BFFF",
+    "border_width": 2
+  },
+  "#username_login_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  },
+  "#password_login_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  },
+  "#username_create_account_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  },
+  "#password_create_account_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  },
+  "#conf_password_create_account_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  }
+}
