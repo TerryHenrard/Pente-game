@@ -29,6 +29,12 @@
       "bold": true
     }
   },
+  "#lobby_title_label": {
+    "font": {
+      "size": 32,
+      "bold": true
+    }
+  },
   "#error_label": {
     "font": {
       "size": 14

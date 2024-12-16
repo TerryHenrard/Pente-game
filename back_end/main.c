@@ -1,3 +1,5 @@
+// FIXME: Client n'est pas retiré de la liste quand il se déconnecte
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,7 +102,7 @@ cJSON *create_auth_response_success(const client_node *client);
 
 cJSON *create_auth_response_failure();
 
-cJSON *create_new_account_response_success();
+cJSON *create_new_account_response_success(const client_node *client);
 
 cJSON *create_disconnect_response();
 
@@ -128,7 +130,7 @@ void handle_response_type(client_node *client, const char *request_type, const c
 
 char *handle_auth_response(const cJSON *json, client_node *client);
 
-char *handle_new_account_response(const cJSON *json);
+char *handle_new_account_response(const cJSON *json, client_node *client);
 
 char *handle_get_lobby_response();
 
@@ -488,12 +490,13 @@ cJSON *create_auth_response_failure() {
     return response;
 }
 
-cJSON *create_new_account_response_success() {
+cJSON *create_new_account_response_success(const client_node *client) {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "new_account_response");
-    cJSON_AddStringToObject(response, "status", "success");
-    cJSON_AddStringToObject(response, "username", "Djimmi");
-    cJSON_AddStringToObject(response, "password", "GrosZgeg");
+    cJSON_AddNumberToObject(response, "status", success);
+
+    cJSON *player_stats = create_player_stat_json(&client->player_stats);
+    cJSON_AddItemToObject(response, "player_stats", player_stats);
 
     return response;
 }
@@ -686,7 +689,7 @@ char *handle_auth_response(const cJSON *json, client_node *client) {
 }
 
 // TODO: Vérifier si le nom d'utilisateur est déjà pris dans la db
-char *handle_new_account_response(const cJSON *json) {
+char *handle_new_account_response(const cJSON *json, client_node *client) {
     const cJSON *password = cJSON_GetObjectItemCaseSensitive(json, "password");
     const cJSON *conf_password = cJSON_GetObjectItemCaseSensitive(json, "conf_password");
 
@@ -698,7 +701,7 @@ char *handle_new_account_response(const cJSON *json) {
         return cJSON_Print(create_new_account_response_failure());
     }
 
-    return cJSON_Print(create_new_account_response_success());
+    return cJSON_Print(create_new_account_response_success(client));
 }
 
 
@@ -832,7 +835,7 @@ void handle_response_type(client_node *client, const char *request_type, const c
     if (strcmp(request_type, AUTHENTICATION_VERB) == 0) {
         response_string = handle_auth_response(json, client);
     } else if (strcmp(request_type, NEW_ACCOUNT_VERB) == 0) {
-        response_string = handle_new_account_response(json);
+        response_string = handle_new_account_response(json, client);
     } else if (strcmp(request_type, GET_LOBBY_VERB) == 0) {
         response_string = handle_get_lobby_response();
     } else if (strcmp(request_type, DISCONNECT_VERB) == 0) {
