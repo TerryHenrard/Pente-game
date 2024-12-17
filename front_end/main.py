@@ -27,6 +27,18 @@ GRID_COLS = 19
 CASE_SIZE = 40
 PIECE_SIZE = 36
 
+# Buttons dimensions
+BUTTON_WIDTH = 200
+BUTTON_HEIGHT = 50
+BUTTON_LEFT_RIGHT_MARGIN = 10
+BUTTON_BOTTOM_MARGIN = 60
+
+# Labels dimensions
+LABEL_WIDTH = 200
+LABEL_HEIGHT = 20
+LABEL_MARGIN_BOTTOM = 10
+LABEL_LEFT_MARGIN = 5
+
 # Couleurs
 BACKGROUND_COLOR = (193, 176, 150)
 LINE_COLOR = (0, 0, 0)
@@ -37,8 +49,9 @@ YELLOW_PION_COLOR = (255, 215, 0, 150)
 THEME_PATH = "assets/styles/theme.json"
 
 # Chemin du fichier audio
-BACKGROUND_MUSIC_PATH = "assets/audio/background_music.mp3"
+BACKGROUND_MUSIC_PATH = "assets/audio/background-music.mp3"
 YOU_SHALL_NOT_PASS_PATH = "assets/audio/login-error.wav"
+LOBBY_ENTRY = "assets/audio/lobby-entry.mp3"
 
 # Chemin des fichiers image
 GANDALF_IMAGE_PATH = "assets/images/gandalf.png"
@@ -54,7 +67,7 @@ def play_music(music_path, volume=1, fade_ms=0, is_loop=False):
         pygame.mixer.music.set_volume(volume)
         pygame.mixer.music.play(loops=1 if is_loop else 0, fade_ms=fade_ms)
     except pygame.error as e:
-        print(f"Erreur lors de la lecture de l'audio : {e}")
+        print(f"Erreur lors de la lecture de la musique : {e}")
 
 
 def stop_music(fade_ms=2000):
@@ -65,27 +78,23 @@ def stop_music(fade_ms=2000):
 
 
 def pause_music():
-    try:
-        pygame.mixer.music.pause()
-    except pygame.error as e:
-        print(f"Erreur lors de la mise en pause de l'audio : {e}")
+    pygame.mixer.music.pause()
 
 
 def unpause_music():
     try:
+        print("Reprise de la musique.")
         pygame.mixer.music.unpause()
     except pygame.error as e:
         print(f"Erreur lors de la reprise de l'audio : {e}")
 
 
-def play_audio(sound_path, volume=0.1, fade_ms=0, is_loop=False):
+def play_audio(sound_path, volume=0.1):
     try:
-        # Check if the sound is already playing
-        if not pygame.mixer.get_busy():
-            # Load and play the sound
+        if not pygame.mixer.get_busy():  # Vérifier si un son est déjà en cours
             sound = pygame.mixer.Sound(sound_path)
             sound.set_volume(volume)
-            sound.play(loops=1 if is_loop else 0, fade_ms=fade_ms)
+            sound.play()
     except pygame.error as e:
         print(f"Erreur lors de la lecture de l'audio : {e}")
 
@@ -128,11 +137,10 @@ def draw_pion(surface, color, position, size):
     surface.blit(pion_surface, position)
 
 
-def send_json(s, json_message):
+def send_json(user_socket, json_message):
     try:
-        print(f"Envoi du message :")
-        print(json_message)
-        s.sendall(json_message.encode())
+        print(f"Envoi du message : {json_message}")
+        user_socket.sendall(json_message.encode())
     except Exception as e:
         print(f"Erreur lors de l'envoi du message : {e}")
 
@@ -158,60 +166,6 @@ def connect_to_server(host, port):
     print("Connecté au serveur.")
 
     return user_socket
-
-
-def handle_server_response(manager, user_socket, current_page_elements, current_event_handler):
-    """
-    Vérifie et traite la réponse du serveur de manière non bloquante.
-
-    Args :
-        s socket: Socket connecté au serveur.
-    Returns :
-        bool : True si la connexion reste active, False en cas d'erreur.
-    """
-    try:
-        # Utiliser select pour vérifier si des données sont disponibles sans bloquer
-        ready_to_read, _, _ = select.select([user_socket], [], [], 0.001)
-
-        # Vérifier s'il y a des données à lire
-        if user_socket not in ready_to_read:
-            return True, current_page_elements, current_event_handler
-
-        # Recevoir et décoder les données
-        response_json = receive_json(user_socket)
-        if not response_json:
-            print("Aucune donnée reçue.")
-            return False, None, None
-
-        # Afficher la réponse de manière lisible
-        print("Réponse du serveur :")
-        print(json.dumps(response_json, indent=4))
-
-        response_type = response_json.get("type")
-        # Traiter la réponse en fonction du type de message
-        if (
-                response_type == "auth_response" or
-                response_type == "new_account_response"
-        ):
-            return handle_auth_response(
-                response_json,
-                current_page_elements,
-                manager
-            )
-        elif response_type == "disconnect_ack":
-            return False, None, None
-
-        return True, current_page_elements, current_event_handler
-
-    except BlockingIOError:
-        # Gérer spécifiquement les erreurs de socket non bloquant
-        print("Socket temporairement indisponible. Nouvelle tentative...")
-        return True, current_page_elements, current_event_handler
-
-    except Exception as e:
-        # Capture des erreurs inattendues
-        print(f"Erreur de communication : {e}")
-        return False, None, None
 
 
 def create_auth_json(username, password):
@@ -294,11 +248,15 @@ def create_background():
     return background
 
 
+# Fonction pour créer le gestionnaire GUI et les éléments
 def create_gui_elements_lobby_page(manager):
     return {
         "title_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 300, SCREEN_HEIGHT // 2 - 300),
+                (
+                    SCREEN_WIDTH // 2 - 300,
+                    SCREEN_HEIGHT // 2 - 300
+                ),
                 (600, 60)
             ),
             text="Menu principal",
@@ -307,60 +265,78 @@ def create_gui_elements_lobby_page(manager):
         ),
         "score_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 - 220),
-                (400, 30)
+                (LABEL_LEFT_MARGIN, BUTTON_LEFT_RIGHT_MARGIN),
+                (LABEL_WIDTH, LABEL_HEIGHT)
             ),
-            text="Score: 0",
+            text="score_label",
             manager=manager,
             object_id="#score_label"
         ),
         "wins_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 - 190),
-                (400, 30)
+                (
+                    LABEL_LEFT_MARGIN,
+                    LABEL_HEIGHT + ((3 / 2) * BUTTON_LEFT_RIGHT_MARGIN)
+                ),
+                (LABEL_WIDTH, LABEL_HEIGHT)
             ),
-            text="Victoires: 0",
+            text="wins_label",
             manager=manager,
             object_id="#wins_label"
         ),
         "losses_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 - 160),
-                (400, 30)
+                (
+                    LABEL_LEFT_MARGIN,
+                    2 * (LABEL_HEIGHT + BUTTON_LEFT_RIGHT_MARGIN)
+                ),
+                (LABEL_WIDTH, LABEL_HEIGHT)
             ),
-            text="Défaites: 0",
+            text="losses_label",
             manager=manager,
             object_id="#losses_label"
         ),
         "games_played_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 - 130),
-                (400, 30)
+                (
+                    LABEL_LEFT_MARGIN,
+                    3 * (LABEL_HEIGHT + BUTTON_LEFT_RIGHT_MARGIN) - (BUTTON_LEFT_RIGHT_MARGIN // 2)
+                ),
+                (LABEL_WIDTH, LABEL_HEIGHT)
             ),
-            text="Parties jouées: 0",
+            text="games_played_label",
             manager=manager,
             object_id="#games_played_label"
         ),
         "create_game_button": pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 60),
-                (200, 50)
+                (
+                    SCREEN_WIDTH // 2 - (BUTTON_WIDTH // 2),
+                    SCREEN_HEIGHT - BUTTON_BOTTOM_MARGIN
+                ),
+                (BUTTON_WIDTH, BUTTON_HEIGHT)
             ),
             text="Créer une partie",
             manager=manager
         ),
         "join_game_button": pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2),
-                (200, 50)
+                (
+                    SCREEN_WIDTH // 2 - ((BUTTON_WIDTH // 2) + BUTTON_WIDTH + BUTTON_LEFT_RIGHT_MARGIN),
+                    SCREEN_HEIGHT - BUTTON_BOTTOM_MARGIN
+                ),
+                (BUTTON_WIDTH, BUTTON_HEIGHT)
             ),
             text="Rejoindre une partie",
             manager=manager
         ),
         "disconnect_button": pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 60),
-                (200, 50)
+                (
+                    SCREEN_WIDTH // 2 + (BUTTON_WIDTH // 2) + BUTTON_LEFT_RIGHT_MARGIN,
+                    SCREEN_HEIGHT - BUTTON_BOTTOM_MARGIN
+                ),
+                (BUTTON_WIDTH, BUTTON_HEIGHT)
             ),
             text="Se déconnecter",
             manager=manager
@@ -377,7 +353,12 @@ def create_gui_elements_lobby_page(manager):
     }
 
 
-# Fonction pour créer le gestionnaire GUI et les éléments
+def create_gui_elements_create_game_page(manager):
+    return {
+
+    }
+
+
 def create_gui_elements_login_page(manager):
     return {
         "title_label": pygame_gui.elements.UILabel(
@@ -426,7 +407,7 @@ def create_gui_elements_login_page(manager):
         "login_button": pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
                 (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 25),
-                (200, 50)
+                (BUTTON_WIDTH, BUTTON_HEIGHT)
             ),
             text="Se connecter",
             manager=manager
@@ -434,7 +415,7 @@ def create_gui_elements_login_page(manager):
         "create_account_button": pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
                 (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 85),
-                (200, 50)
+                (BUTTON_WIDTH, BUTTON_HEIGHT)
             ),
             text="Créer un compte",
             manager=manager
@@ -516,7 +497,7 @@ def create_gui_elements_new_account_page(manager):
         "create_button": pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
                 (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 75),
-                (200, 50)
+                (BUTTON_WIDTH, BUTTON_HEIGHT)
             ),
             text="Créer",
             manager=manager
@@ -524,7 +505,7 @@ def create_gui_elements_new_account_page(manager):
         "back_button": pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
                 (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 135),
-                (200, 50)
+                (BUTTON_WIDTH, BUTTON_HEIGHT)
             ),
             text="Retour",
             manager=manager
@@ -541,9 +522,95 @@ def create_gui_elements_new_account_page(manager):
     }
 
 
-def handle_auth_response(response_json, current_page_elements, manager):
-    response_status = response_json.get("status")
-    if response_status != RESPONSE_SUCCESS_STATUS:
+def handle_server_response(manager, user_socket, current_page_elements, current_event_handler):
+    """
+    Vérifie et traite la réponse du serveur de manière non bloquante.
+
+    Args :
+        s socket: Socket connecté au serveur.
+    Returns :
+        bool : True si la connexion reste active, False en cas d'erreur.
+    """
+    try:
+        # Utiliser select pour vérifier si des données sont disponibles sans bloquer
+        ready_to_read, _, _ = select.select([user_socket], [], [], 0.001)
+
+        # Vérifier s'il y a des données à lire
+        if user_socket not in ready_to_read:
+            return True, current_page_elements, current_event_handler
+
+        # Recevoir et décoder les données
+        response_json = receive_json(user_socket)
+        if not response_json:
+            print("Aucune donnée reçue.")
+            return False, None, None
+
+        # Afficher la réponse de manière lisible
+        print("Réponse du serveur :")
+        print(json.dumps(response_json, indent=4))
+
+        response_type = response_json.get("type")
+        # Traiter la réponse en fonction du type de message
+        if (
+                response_type == "auth_response" or
+                response_type == "new_account_response"
+        ):
+            return handle_auth_response(
+                response_json,
+                current_page_elements,
+                manager,
+                user_socket
+            )
+        elif response_type == "disconnect_ack":
+            return handle_disconnect_ack_response(
+                response_json,
+                current_page_elements,
+                manager
+            )
+        elif response_type == "get_lobby_response":
+            return handle_game_list_response(
+                response_json,
+                current_page_elements,
+                manager
+            )
+
+        return True, current_page_elements, current_event_handler
+
+    except BlockingIOError:
+        # Gérer spécifiquement les erreurs de socket non bloquant
+        print("Socket temporairement indisponible. Nouvelle tentative...")
+        return True, current_page_elements, current_event_handler
+
+    except Exception as e:
+        # Capture des erreurs inattendues
+        print(f"Erreur de communication : {e}")
+        return False, None, None
+
+
+def handle_game_list_response(response_json, current_page_elements, manager):
+    print("Liste des parties reçue.")
+    return True, current_page_elements, handle_events_on_lobby_page
+
+
+def handle_disconnect_ack_response(response_json, current_page_elements, manager):
+    response_status = response_json.get("status", None)
+
+    if response_status is None or not response_status == RESPONSE_SUCCESS_STATUS:
+        current_page_elements["error_label"].set_text("Déconnexion échouée !")
+        return response_status is not None, current_page_elements, handle_events_on_lobby_page
+
+    clear_page(current_page_elements)
+    next_page_elements = create_gui_elements_login_page(manager)
+
+    return True, next_page_elements, handle_events_on_login_page
+
+
+def handle_auth_response(response_json, current_page_elements, manager, user_socket):
+    response_status = response_json.get("status", None)
+
+    if response_status is None or not response_status == RESPONSE_SUCCESS_STATUS:
+        current_page_elements["error_label"].set_text("Mot de passe incorrect !")
+        # play_audio(YOU_SHALL_NOT_PASS_PATH)
         return response_status is not None, current_page_elements, handle_events_on_login_page
 
     clear_page(current_page_elements)
@@ -556,6 +623,10 @@ def handle_auth_response(response_json, current_page_elements, manager):
     next_page_elements["losses_label"].set_text(f"Défaites: {player_stats.get('losses', 0)}")
     next_page_elements["games_played_label"].set_text(f"Parties jouées: {player_stats.get('games_played', 0)}")
 
+    # play_audio(LOBBY_ENTRY)
+
+    send_json(user_socket, create_get_lobby_json())
+
     return True, next_page_elements, handle_events_on_lobby_page
 
 
@@ -566,7 +637,7 @@ def handle_login_event(login_page_elements, user_socket):
     if not username or not password:
         print("Nom d'utilisateur ou mot de passe vide !")
         login_page_elements["error_label"].set_text("Nom d'utilisateur ou mot de passe vide !")
-        play_audio(YOU_SHALL_NOT_PASS_PATH)
+        # play_audio(YOU_SHALL_NOT_PASS_PATH)
         return
 
     print(f"Tentative de connexion : {username}, {password}")
@@ -586,17 +657,17 @@ def handle_create_new_account_event(new_account_page_elements, user_socket):
 
     if not username or not password:
         new_account_page_elements["error_label"].set_text("Nom d'utilisateur ou mot de passe vide !")
-        play_audio(YOU_SHALL_NOT_PASS_PATH)
+        # play_audio(YOU_SHALL_NOT_PASS_PATH)
         return
 
     if len(password) < 12:
         new_account_page_elements["error_label"].set_text("Le mot de passe doit contenir au moins 12 caractères.")
-        play_audio(YOU_SHALL_NOT_PASS_PATH)
+        # play_audio(YOU_SHALL_NOT_PASS_PATH)
         return
 
     if password != conf_password:
         new_account_page_elements["error_label"].set_text("Les mots de passe ne correspondent pas.")
-        play_audio(YOU_SHALL_NOT_PASS_PATH)
+        # play_audio(YOU_SHALL_NOT_PASS_PATH)
         return
 
     print(f"Tentative de création de compte : {username}, {password}")
@@ -614,9 +685,14 @@ def handle_events_on_lobby_page(manager, lobby_page_elements, user_socket):
         if event.type == pygame.QUIT:
             return False, None, None
 
-        if event.type == pygame_gui.UI_BUTTON_PRESSED:
-            if event.ui_element == lobby_page_elements["create_game_button"]:
+        elif event.type == pygame_gui.UI_BUTTON_PRESSED:
+            if event.ui_element == lobby_page_elements["join_game_button"]:
+                print("Partie rejointe.")
+            elif event.ui_element == lobby_page_elements["create_game_button"]:
                 print("Création d'une partie.")
+            elif event.ui_element == lobby_page_elements["disconnect_button"]:
+                print("Déconnexion.")
+                send_json(user_socket, create_deconnection_json())
 
         manager.process_events(event)
 
@@ -628,13 +704,13 @@ def handle_events_on_new_account_page(manager, create_account_elements, user_soc
         if event.type == pygame.QUIT:
             return False, None, None
 
-        if event.type == pygame.KEYDOWN:
+        elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_RETURN:
                 handle_create_new_account_event(create_account_elements, user_socket)
             else:
                 create_account_elements["error_label"].set_text("")
 
-        if event.type == pygame_gui.UI_BUTTON_PRESSED:
+        elif event.type == pygame_gui.UI_BUTTON_PRESSED:
             if event.ui_element == create_account_elements["create_button"]:
                 handle_create_new_account_event(create_account_elements, user_socket)
 
@@ -654,13 +730,13 @@ def handle_events_on_login_page(manager, login_page_elements, user_socket):
         if event.type == pygame.QUIT:
             return False, None, None
 
-        if event.type == pygame.KEYDOWN:
+        elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_RETURN:
                 handle_login_event(login_page_elements, user_socket)
             else:
                 login_page_elements["error_label"].set_text("")
 
-        if event.type == pygame_gui.UI_BUTTON_PRESSED:
+        elif event.type == pygame_gui.UI_BUTTON_PRESSED:
             if event.ui_element == login_page_elements["login_button"]:
                 handle_login_event(login_page_elements, user_socket)
 
@@ -685,7 +761,7 @@ def clear_page(elements):
 
 
 def main():
-    play_music(BACKGROUND_MUSIC_PATH, 1, 5000, True)
+    # play_music(BACKGROUND_MUSIC_PATH, 1, 5000, True)
 
     screen = init_pygame()
     background = create_background()
