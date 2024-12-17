@@ -34,6 +34,12 @@ typedef enum {
     ongoing
 } game_status;
 
+typedef enum {
+    not_authenticated,
+    authenticated
+} authenticated_status;
+
+
 // Structure pour représenter les statistiques d'un joueur
 typedef struct player_stat {
     int score;
@@ -45,7 +51,7 @@ typedef struct player_stat {
 // Structure pour représenter un client dans une liste chaînée
 typedef struct client_node {
     int socket;
-    int is_authenticated;
+    authenticated_status is_authenticated;
     char username[50];
     char password[50];
     player_stat player_stats;
@@ -126,7 +132,7 @@ cJSON *create_game_over_defeat_response(const client_node *loser);
 
 cJSON *create_player_stat_json(const player_stat *player_stats);
 
-void handle_response_type(client_node *client, const char *request_type, const cJSON *json);
+void handle_client_response_type(client_node *client, const char *request_type, const cJSON *json);
 
 char *handle_auth_response(const cJSON *json, client_node *client);
 
@@ -134,7 +140,7 @@ char *handle_new_account_response(const cJSON *json, client_node *client);
 
 char *handle_get_lobby_response();
 
-char *handle_disconnect_response();
+char *handle_disconnect_response(client_node *client);
 
 char *handle_create_game_response(const cJSON *json, client_node *client);
 
@@ -145,6 +151,8 @@ int add_client_to_game(game_node *game, client_node *client);
 void finish_game(game_node *game);
 
 void complete_client_node(client_node *client, const cJSON *json);
+
+void empty_client(client_node *client);
 
 // Fonction principale
 int main() {
@@ -264,6 +272,7 @@ int remove_client_from_list(const int client_socket) {
     while (*current) {
         client_node *entry = *current;
         if (entry->socket == client_socket) {
+            printf("Suppression du client %s\n", entry->username);
             *current = entry->next; // Supprimer le client de la liste
             free(entry); // Libérer la mémoire associée au client
 
@@ -329,6 +338,7 @@ int remove_game_from_list(const int game_id) {
     while (*current) {
         game_node *entry = *current;
         if (entry->id == game_id) {
+            printf("Removing game %d\n", game_id);
             *current = entry->next; // Remove the game from the list
             free(entry); // Free the memory associated with the game
 
@@ -512,6 +522,7 @@ cJSON *create_new_account_response_failure() {
 cJSON *create_disconnect_response() {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "disconnect_ack");
+    cJSON_AddNumberToObject(response, "status", 1);
 
     return response;
 }
@@ -669,6 +680,19 @@ void complete_client_node(client_node *client, const cJSON *json) {
     client->is_authenticated = 1;
 }
 
+void empty_client(client_node *client) {
+    printf("Emptying client %s\n", client->username);
+    client->is_authenticated = not_authenticated;
+    memset(client->username, 0, sizeof(client->username));
+    memset(client->password, 0, sizeof(client->password));
+    memset(client->recv_buffer, 0, sizeof(client->recv_buffer));
+    memset(client->send_buffer, 0, sizeof(client->send_buffer));
+    client->player_stats.score = 0;
+    client->player_stats.wins = 0;
+    client->player_stats.losses = 0;
+    client->player_stats.games_played = 0;
+}
+
 char *handle_auth_response(const cJSON *json, client_node *client) {
     const cJSON *password = cJSON_GetObjectItemCaseSensitive(json, "password");
 
@@ -711,7 +735,9 @@ char *handle_get_lobby_response() {
     return response_string;
 }
 
-char *handle_disconnect_response() {
+char *handle_disconnect_response(client_node *client) {
+    empty_client(client);
+
     char *response_string = cJSON_Print(create_disconnect_response());
     return response_string;
 }
@@ -829,7 +855,7 @@ char *handle_join_game_response(const cJSON *json, client_node *client) {
     return cJSON_Print(create_join_game_response_success());
 }
 
-void handle_response_type(client_node *client, const char *request_type, const cJSON *json) {
+void handle_client_response_type(client_node *client, const char *request_type, const cJSON *json) {
     char *response_string = NULL;
 
     if (strcmp(request_type, AUTHENTICATION_VERB) == 0) {
@@ -839,7 +865,7 @@ void handle_response_type(client_node *client, const char *request_type, const c
     } else if (strcmp(request_type, GET_LOBBY_VERB) == 0) {
         response_string = handle_get_lobby_response();
     } else if (strcmp(request_type, DISCONNECT_VERB) == 0) {
-        response_string = handle_disconnect_response();
+        response_string = handle_disconnect_response(client);
     } else if (strcasecmp(request_type, CREATE_GAME_VERB) == 0) {
         response_string = handle_create_game_response(json, client);
     } else if (strcasecmp(request_type, JOIN_GAME_VERB) == 0) {
@@ -881,17 +907,12 @@ void process_cmd(client_node *client, const char *command) {
         return;
     }
 
-    // Déléguer le traitement à handle_response_type
-    handle_response_type(client, type->valuestring, json);
+    // Déléguer le traitement à handle_client_response_type
+    handle_client_response_type(client, type->valuestring, json);
 
     // Envoyer la réponse au client
     printf("Réponse SERVEUR:\n%s\n", client->send_buffer);
     send_packet(client);
-
-    // Ferme la connexion si le type est "disconnect"
-    if (strcmp(type->valuestring, "disconnect") == 0) {
-        remove_client_from_list(client->socket);
-    }
 
     // Libérer la mémoire du JSON
     cJSON_Delete(json);
