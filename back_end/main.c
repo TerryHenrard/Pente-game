@@ -530,7 +530,7 @@ cJSON *create_disconnect_response() {
 cJSON *create_get_lobby_response() {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "get_lobby_response");
-    cJSON_AddStringToObject(response, "status", "success");
+    cJSON_AddNumberToObject(response, "status", success);
 
     cJSON *games = cJSON_CreateArray();
     const game_node *current_game = head_linked_list_game;
@@ -541,7 +541,7 @@ cJSON *create_get_lobby_response() {
         cJSON *game = cJSON_CreateObject();
         cJSON_AddNumberToObject(game, "id", current_game->id);
         cJSON_AddStringToObject(game, "name", current_game->name);
-        cJSON_AddStringToObject(game, "status", current_game->status == waiting ? "waiting" : "ongoing");
+        cJSON_AddNumberToObject(game, "status", current_game->status == waiting ? waiting : ongoing);
 
         cJSON *players = cJSON_CreateArray();
         cJSON_AddItemToArray(players, cJSON_CreateString(current_game->player1->username));

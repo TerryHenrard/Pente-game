@@ -31,7 +31,11 @@ PIECE_SIZE = 36
 BUTTON_WIDTH = 200
 BUTTON_HEIGHT = 50
 BUTTON_LEFT_RIGHT_MARGIN = 10
+BUTTON_BETWEEN_MARGIN = 10
 BUTTON_BOTTOM_MARGIN = 60
+BUTTON_GAME_WIDTH = SCREEN_WIDTH // 2 + 50
+BUTTON_GAME_HEIGHT = 45
+BUTTON_GAME_MARGIN = 10
 
 # Labels dimensions
 LABEL_WIDTH = 200
@@ -59,6 +63,12 @@ GANDALF_IMAGE_PATH = "assets/images/gandalf.png"
 # Status de la réponse (JSON)
 RESPONSE_SUCCESS_STATUS = 1
 RESPONSE_FAIL_STATUS = 0
+
+# player stats
+score = 0
+wins = 0
+losses = 0
+games_played = 0
 
 
 def play_music(music_path, volume=1, fade_ms=0, is_loop=False):
@@ -265,7 +275,7 @@ def create_gui_elements_lobby_page(manager):
         ),
         "score_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (LABEL_LEFT_MARGIN, BUTTON_LEFT_RIGHT_MARGIN),
+                (LABEL_LEFT_MARGIN, BUTTON_BETWEEN_MARGIN),
                 (LABEL_WIDTH, LABEL_HEIGHT)
             ),
             text="score_label",
@@ -276,7 +286,7 @@ def create_gui_elements_lobby_page(manager):
             relative_rect=pygame.Rect(
                 (
                     LABEL_LEFT_MARGIN,
-                    LABEL_HEIGHT + ((3 / 2) * BUTTON_LEFT_RIGHT_MARGIN)
+                    LABEL_HEIGHT + ((3 / 2) * BUTTON_BETWEEN_MARGIN)
                 ),
                 (LABEL_WIDTH, LABEL_HEIGHT)
             ),
@@ -288,7 +298,7 @@ def create_gui_elements_lobby_page(manager):
             relative_rect=pygame.Rect(
                 (
                     LABEL_LEFT_MARGIN,
-                    2 * (LABEL_HEIGHT + BUTTON_LEFT_RIGHT_MARGIN)
+                    2 * (LABEL_HEIGHT + BUTTON_BETWEEN_MARGIN)
                 ),
                 (LABEL_WIDTH, LABEL_HEIGHT)
             ),
@@ -300,7 +310,7 @@ def create_gui_elements_lobby_page(manager):
             relative_rect=pygame.Rect(
                 (
                     LABEL_LEFT_MARGIN,
-                    3 * (LABEL_HEIGHT + BUTTON_LEFT_RIGHT_MARGIN) - (BUTTON_LEFT_RIGHT_MARGIN // 2)
+                    3 * (LABEL_HEIGHT + BUTTON_BETWEEN_MARGIN) - (BUTTON_BETWEEN_MARGIN // 2)
                 ),
                 (LABEL_WIDTH, LABEL_HEIGHT)
             ),
@@ -311,7 +321,7 @@ def create_gui_elements_lobby_page(manager):
         "create_game_button": pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
                 (
-                    SCREEN_WIDTH // 2 - (BUTTON_WIDTH // 2),
+                    SCREEN_WIDTH // 2 - BUTTON_WIDTH,
                     SCREEN_HEIGHT - BUTTON_BOTTOM_MARGIN
                 ),
                 (BUTTON_WIDTH, BUTTON_HEIGHT)
@@ -319,21 +329,10 @@ def create_gui_elements_lobby_page(manager):
             text="Créer une partie",
             manager=manager
         ),
-        "join_game_button": pygame_gui.elements.UIButton(
-            relative_rect=pygame.Rect(
-                (
-                    SCREEN_WIDTH // 2 - ((BUTTON_WIDTH // 2) + BUTTON_WIDTH + BUTTON_LEFT_RIGHT_MARGIN),
-                    SCREEN_HEIGHT - BUTTON_BOTTOM_MARGIN
-                ),
-                (BUTTON_WIDTH, BUTTON_HEIGHT)
-            ),
-            text="Rejoindre une partie",
-            manager=manager
-        ),
         "disconnect_button": pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
                 (
-                    SCREEN_WIDTH // 2 + (BUTTON_WIDTH // 2) + BUTTON_LEFT_RIGHT_MARGIN,
+                    SCREEN_WIDTH // 2 + BUTTON_LEFT_RIGHT_MARGIN,
                     SCREEN_HEIGHT - BUTTON_BOTTOM_MARGIN
                 ),
                 (BUTTON_WIDTH, BUTTON_HEIGHT)
@@ -355,7 +354,69 @@ def create_gui_elements_lobby_page(manager):
 
 def create_gui_elements_create_game_page(manager):
     return {
-
+        "title_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (SCREEN_WIDTH // 2 - 300, SCREEN_HEIGHT // 2 - 300),
+                (600, 60)
+            ),
+            text="Créer une partie",
+            manager=manager,
+            object_id='#new_game_title_label'
+        ),
+        "game_name_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (
+                    SCREEN_WIDTH // 2 - (BUTTON_WIDTH // 2),
+                    SCREEN_HEIGHT // 2 - 115
+                ),
+                (200, 30)
+            ),
+            text="Nom de la partie",
+            manager=manager,
+            object_id="#game_name_label"
+        ),
+        "game_name_entry": pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect(
+                (
+                    SCREEN_WIDTH // 2 - (BUTTON_WIDTH // 2),
+                    SCREEN_HEIGHT // 2 - 85
+                ),
+                (200, 30)
+            ),
+            manager=manager,
+            object_id="#game_name_entry"
+        ),
+        "create_new_game_button": pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(
+                (
+                    SCREEN_WIDTH // 2 - (BUTTON_WIDTH // 2),
+                    SCREEN_HEIGHT // 2 + 25
+                ),
+                (BUTTON_WIDTH, BUTTON_HEIGHT)
+            ),
+            text="Créer",
+            manager=manager
+        ),
+        "back_button": pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(
+                (
+                    SCREEN_WIDTH // 2 - (BUTTON_WIDTH // 2),
+                    SCREEN_HEIGHT // 2 + 85
+                ),
+                (BUTTON_WIDTH, BUTTON_HEIGHT)
+            ),
+            text="Retour",
+            manager=manager
+        ),
+        "error_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 + 155),
+                (300, 30)
+            ),
+            text="",
+            manager=manager,
+            object_id="#error_label"
+        )
     }
 
 
@@ -522,6 +583,20 @@ def create_gui_elements_new_account_page(manager):
     }
 
 
+def create_gui_game_page(manager):
+    return {
+        "title_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (SCREEN_WIDTH // 2 - 300, SCREEN_HEIGHT // 2 - 300),
+                (600, 60)
+            ),
+            text="En train de rejoindre la partie",
+            manager=manager,
+            object_id='#new_join_game_title_label'
+        ),
+    }
+
+
 def handle_server_response(manager, user_socket, current_page_elements, current_event_handler):
     """
     Vérifie et traite la réponse du serveur de manière non bloquante.
@@ -568,7 +643,13 @@ def handle_server_response(manager, user_socket, current_page_elements, current_
                 manager
             )
         elif response_type == "get_lobby_response":
-            return handle_game_list_response(
+            return handle_get_lobby_response(
+                response_json,
+                current_page_elements,
+                manager
+            )
+        elif response_type == "create_game_response":
+            return handle_create_game_response(
                 response_json,
                 current_page_elements,
                 manager
@@ -587,8 +668,105 @@ def handle_server_response(manager, user_socket, current_page_elements, current_
         return False, None, None
 
 
-def handle_game_list_response(response_json, current_page_elements, manager):
-    print("Liste des parties reçue.")
+def add_padding(text, total_length=20, align="left", padding_char=" "):
+    """
+    Ajuste le texte pour qu'il ait exactement total_length caractères.
+
+    :param text: La chaîne à ajuster.
+    :param total_length: La longueur totale désirée.
+    :param align: L'alignement du texte ("left", "right", "center").
+    :param padding_char: Le caractère utilisé pour le padding.
+    :return: La chaîne ajustée ou tronquée.
+    """
+    text = str(text).strip()  # Supprime les espaces inutiles
+    if len(text) > total_length:
+        return text[:total_length]  # Tronque si trop long
+    elif align == "left":
+        return text.ljust(total_length, padding_char)
+    elif align == "right":
+        return text.rjust(total_length, padding_char)
+    elif align == "center":
+        return text.center(total_length, padding_char)
+    else:
+        raise ValueError("align doit être 'left', 'right' ou 'center'")
+
+
+def create_gui_join_game_button_element(game_json, manager, index):
+    game_id = game_json.get("id", None)
+    game_name = game_json.get("name", None)
+    game_players = game_json.get("players", None)
+    game_status = game_json.get("status", None)  # waiting 0 / ongoing 1
+
+    if None in [game_id, game_name, game_players, game_status]:
+        return None
+
+    button_text = (
+            add_padding(f"N°{index + 1}", total_length=7) +
+            add_padding(f"Name: {game_name}", total_length=30) +
+            add_padding(f"Status: {'waiting' if game_status == 0 else 'ongoing'}") +
+            add_padding(f"Players: {', '.join(game_players)}")
+    )
+
+    return pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect(
+            (
+                SCREEN_WIDTH // 2 - (BUTTON_GAME_WIDTH // 2),
+                (100 + (BUTTON_GAME_HEIGHT * index) + 10)
+            ),
+            (BUTTON_GAME_WIDTH, BUTTON_GAME_HEIGHT)
+        ),
+        text=button_text,
+        manager=manager,
+        object_id=f"#button_game_{game_id}"
+    )
+
+
+def handle_create_game_response(response_json, current_page_elements, manager):
+    response_status = response_json.get("status", None)
+
+    if (
+            response_status is None or
+            not response_status == RESPONSE_SUCCESS_STATUS
+    ):
+        current_page_elements["error_label"].set_text("Une partie contenant ce nom existe déjà.")
+        return response_status is not None, current_page_elements, handle_events_on_lobby_page
+
+    clear_page(current_page_elements)
+    game_page_elements = create_gui_game_page(manager)
+
+    return True, game_page_elements, handle_events_on_game_page
+
+
+def handle_get_lobby_response(response_json, current_page_elements, manager):
+    response_status = response_json.get("status", None)
+
+    if response_status is None or not response_status == RESPONSE_SUCCESS_STATUS:
+        current_page_elements["error_label"].set_text("Erreur lors de la récupération des parties.")
+        return response_status is not None, current_page_elements, handle_events_on_lobby_page
+
+    game_list = response_json.get("games", [])
+    if not game_list:
+        current_page_elements["error_label"].set_text("Aucune partie disponible.")
+        return True, current_page_elements, handle_events_on_lobby_page
+
+    # Supprimer l'ancienne liste de boutons si elle existe
+    if "game_buttons" not in current_page_elements:
+        current_page_elements["game_buttons"] = []
+        clear_page(current_page_elements)
+        current_page_elements = create_gui_elements_lobby_page(manager)
+        display_player_stats(current_page_elements)
+
+    # Ajouter les nouveaux boutons dans un tableau
+    buttons = []
+    for index, game_json in enumerate(game_list):
+        button = create_gui_join_game_button_element(game_json, manager, index)
+        if button:
+            buttons.append(button)
+
+    # Stocker le tableau des boutons dans current_page_elements
+    buttons.reverse()
+    current_page_elements["game_buttons"] = buttons
+
     return True, current_page_elements, handle_events_on_lobby_page
 
 
@@ -599,13 +777,23 @@ def handle_disconnect_ack_response(response_json, current_page_elements, manager
         current_page_elements["error_label"].set_text("Déconnexion échouée !")
         return response_status is not None, current_page_elements, handle_events_on_lobby_page
 
+    print(current_page_elements)
     clear_page(current_page_elements)
-    next_page_elements = create_gui_elements_login_page(manager)
+    login_page_elements = create_gui_elements_login_page(manager)
 
-    return True, next_page_elements, handle_events_on_login_page
+    return True, login_page_elements, handle_events_on_login_page
+
+
+def display_player_stats(next_page_elements):
+    next_page_elements["score_label"].set_text(f"Score: {score}")
+    next_page_elements["wins_label"].set_text(f"Victoires: {wins}")
+    next_page_elements["losses_label"].set_text(f"Défaites: {losses}")
+    next_page_elements["games_played_label"].set_text(f"Parties jouées: {games_played}")
 
 
 def handle_auth_response(response_json, current_page_elements, manager, user_socket):
+    global score, wins, losses, games_played
+
     response_status = response_json.get("status", None)
 
     if response_status is None or not response_status == RESPONSE_SUCCESS_STATUS:
@@ -614,20 +802,21 @@ def handle_auth_response(response_json, current_page_elements, manager, user_soc
         return response_status is not None, current_page_elements, handle_events_on_login_page
 
     clear_page(current_page_elements)
-    next_page_elements = create_gui_elements_lobby_page(manager)
+    lobby_page_elements = create_gui_elements_lobby_page(manager)
 
     # Afficher les informations du JSON
     player_stats = response_json.get("player_stats", {})
-    next_page_elements["score_label"].set_text(f"Score: {player_stats.get('score', 0)}")
-    next_page_elements["wins_label"].set_text(f"Victoires: {player_stats.get('wins', 0)}")
-    next_page_elements["losses_label"].set_text(f"Défaites: {player_stats.get('losses', 0)}")
-    next_page_elements["games_played_label"].set_text(f"Parties jouées: {player_stats.get('games_played', 0)}")
+    score = player_stats.get("score", 0)
+    wins = player_stats.get("wins", 0)
+    losses = player_stats.get("losses", 0)
+    games_played = player_stats.get("games_played", 0)
+    display_player_stats(lobby_page_elements)
 
     # play_audio(LOBBY_ENTRY)
 
     send_json(user_socket, create_get_lobby_json())
 
-    return True, next_page_elements, handle_events_on_lobby_page
+    return True, lobby_page_elements, handle_events_on_lobby_page
 
 
 def handle_login_event(login_page_elements, user_socket):
@@ -680,16 +869,73 @@ def handle_create_new_account_event(new_account_page_elements, user_socket):
     send_json(user_socket, json_new_account_message)
 
 
+def handle_create_new_game_event(new_game_page_elements, user_socket):
+    game_name = new_game_page_elements["game_name_entry"].get_text()
+
+    if not game_name:
+        new_game_page_elements["error_label"].set_text("Veuillez donner un nom à la partie")
+        return
+
+    if len(game_name) >= 20:
+        new_game_page_elements["error_label"].set_text("Maximum 20 caractères")
+        return
+
+    print(f"Tentative de création de la partie : {game_name}")
+    json_new_game_message = create_new_game_json(game_name)
+    if not json_new_game_message:
+        print("Erreur lors de la création de la partie")
+        return
+
+    send_json(user_socket, json_new_game_message)
+
+
+def handle_events_on_create_new_game_page(manager, new_game_page_elements, user_socket):
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return False, None, None
+
+        elif event.type == pygame_gui.UI_BUTTON_PRESSED:
+            if event.ui_element == new_game_page_elements["create_new_game_button"]:
+                print("Création de la partie")
+                handle_create_new_game_event(new_game_page_elements, user_socket)
+
+            elif event.ui_element == new_game_page_elements["back_button"]:
+                print("Retour au lobby")
+                send_json(user_socket, create_get_lobby_json())
+
+        manager.process_events(event)
+    return True, new_game_page_elements, handle_events_on_create_new_game_page
+
+
+def handle_events_on_game_page(manager, join_game_page_elements, user_socket):
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return False, None, None
+
+        manager.process_events(event)
+
+    return True, join_game_page_elements, handle_events_on_game_page
+
+
 def handle_events_on_lobby_page(manager, lobby_page_elements, user_socket):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False, None, None
 
         elif event.type == pygame_gui.UI_BUTTON_PRESSED:
-            if event.ui_element == lobby_page_elements["join_game_button"]:
-                print("Partie rejointe.")
-            elif event.ui_element == lobby_page_elements["create_game_button"]:
+            if event.ui_element == lobby_page_elements["create_game_button"]:
                 print("Création d'une partie.")
+                clear_page(lobby_page_elements)
+                create_new_game_elements = create_gui_elements_create_game_page(manager)
+                return True, create_new_game_elements, handle_events_on_create_new_game_page
+
+            elif event.ui_element in lobby_page_elements["game_buttons"]:
+                clicked_button_index = lobby_page_elements["game_buttons"].index(event.ui_element)
+                print(f"Joining game {lobby_page_elements["game_buttons"][clicked_button_index].text}")
+                clear_page(lobby_page_elements)
+                create_game_elements = create_gui_game_page(manager)
+                return True, create_game_elements, handle_events_on_game_page
+
             elif event.ui_element == lobby_page_elements["disconnect_button"]:
                 print("Déconnexion.")
                 send_json(user_socket, create_deconnection_json())
@@ -754,8 +1000,15 @@ def handle_events_on_login_page(manager, login_page_elements, user_socket):
 
 
 def clear_page(elements):
-    for element in elements.values():
-        element.kill()
+    for key, element in elements.items():
+        if isinstance(element, list):
+            for sub_element in element:
+                if hasattr(sub_element, "kill"):
+                    sub_element.kill()
+        elif hasattr(element, "kill"):
+            element.kill()
+        else:
+            print(f"Warning: Element {element} has no kill() method.")
 
     elements.clear()
 
