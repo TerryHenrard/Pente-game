@@ -35,6 +35,18 @@
       "bold": true
     }
   },
+  "#new_game_title_label": {
+    "font": {
+      "size": 32,
+      "bold": true
+    }
+  },
+  "#new_join_game_title_label": {
+    "font": {
+      "size": 32,
+      "bold": true
+    }
+  },
   "#error_label": {
     "font": {
       "size": 14
@@ -80,6 +92,12 @@
       "hovered_text": "#FFFFFF"
     }
   },
+  "#game_name_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  },
   "#score_label": {
     "font": {
       "size": 14
@@ -108,6 +126,26 @@
     "font": {
       "size": 14
     },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
+  "#button_game_0": {
+    "normal_text": "#FFFFFF",
+    "hovered_text": "#FFFFE0",
+    "normal_bg": "#1E90FF",
+    "hovered_bg": "#00BFFF",
+    "border_width": 2,
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
+  "#button_game_1": {
+    "normal_text": "#FFFFFF",
+    "hovered_text": "#FFFFE0",
+    "normal_bg": "#1E90FF",
+    "hovered_bg": "#00BFFF",
+    "border_width": 2,
     "misc": {
       "text_horiz_alignment": "left"
     }
