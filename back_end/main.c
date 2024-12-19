@@ -21,6 +21,9 @@
 #define DISCONNECT_VERB "disconnect"    // Verbe attendu pour la déconnexion
 #define CREATE_GAME_VERB "create_game"  // Verbe attendu pour la création d'une nouvelle partie
 #define JOIN_GAME_VERB "join_game"      // Verbe attendu pour rejoindre une partie
+#define READY_TO_PLAY_VERB "ready_to_play"     // Verbe attendu pour signaler que le joueur est prêt à commencer la partie
+
+
 
 // enum pour les statuts de la requête
 typedef enum {
@@ -90,6 +93,8 @@ void print_client_list();
 
 game_node *find_game_by_name(const char *game_name);
 
+game_node *find_game_by_player(const client_node *client);
+
 void add_client_to_list(int client_socket);
 
 int remove_client_from_list(int client_socket);
@@ -132,7 +137,21 @@ cJSON *create_game_over_defeat_response(const client_node *loser);
 
 cJSON *create_player_stat_json(const player_stat *player_stats);
 
+cJSON *create_ready_to_play_response_success();
+
+cJSON *create_ready_to_play_response_failure();
+
+cJSON *create_alert_start_game_success();
+
+cJSON *create_alert_start_game_failure();
+
+void print_game_info(const game_node *game);
+
+void validate_game_list();
+
 void handle_client_response_type(client_node *client, const char *request_type, const cJSON *json);
+
+char *handle_ready_to_play_response(const client_node *client);
 
 char *handle_auth_response(const cJSON *json, client_node *client);
 
@@ -240,6 +259,20 @@ game_node *find_game_by_name(const char *game_name) {
     while (
         current &&
         strcmp(current->name, game_name) != 0
+    ) {
+        current = current->next;
+    }
+
+    return current;
+}
+
+game_node *find_game_by_player(const client_node *client) {
+    game_node *current = head_linked_list_game;
+
+    while (
+        current &&
+        current->player1 != client &&
+        current->player2 != client
     ) {
         current = current->next;
     }
@@ -522,7 +555,23 @@ cJSON *create_new_account_response_failure() {
 cJSON *create_disconnect_response() {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "disconnect_ack");
-    cJSON_AddNumberToObject(response, "status", 1);
+    cJSON_AddNumberToObject(response, "status", success);
+
+    return response;
+}
+
+cJSON *create_ready_to_play_response_success() {
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddStringToObject(response, "type", "ready_to_play_response");
+    cJSON_AddNumberToObject(response, "status", success);
+
+    return response;
+}
+
+cJSON *create_ready_to_play_response_failure() {
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddStringToObject(response, "type", "ready_to_play_response");
+    cJSON_AddNumberToObject(response, "status", failure);
 
     return response;
 }
@@ -591,7 +640,7 @@ cJSON *create_game_response_failure() {
 cJSON *create_join_game_response_success() {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "join_game_response");
-    cJSON_AddStringToObject(response, "status", "success");
+    cJSON_AddNumberToObject(response, "status", success);
 
     return response;
 }
@@ -603,7 +652,6 @@ cJSON *create_join_game_response_failure() {
 
     return response;
 }
-
 
 cJSON *create_unknow_response() {
     cJSON *response = cJSON_CreateObject();
@@ -641,6 +689,22 @@ cJSON *create_player_stat_json(const player_stat *player_stats) {
     cJSON_AddNumberToObject(player_stats_json, "games_played", player_stats->games_played);
 
     return player_stats_json;
+}
+
+cJSON *create_alert_start_game_success() {
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddStringToObject(response, "type", "alert_start_game");
+    cJSON_AddNumberToObject(response, "status", success);
+
+    return response;
+}
+
+cJSON *create_alert_start_game_failure() {
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddStringToObject(response, "type", "alert_start_game");
+    cJSON_AddNumberToObject(response, "status", failure);
+
+    return response;
 }
 
 void complete_client_node(client_node *client, const cJSON *json) {
@@ -756,6 +820,7 @@ char *handle_create_game_response(const cJSON *json, client_node *client) {
     }
 
     print_game_list();
+
     return cJSON_Print(create_game_response_success(game));
 }
 
@@ -851,8 +916,31 @@ char *handle_join_game_response(const cJSON *json, client_node *client) {
     }
 
     print_game_list();
-    finish_game(game);
+
     return cJSON_Print(create_join_game_response_success());
+}
+
+char *handle_ready_to_play_response(const client_node *client) {
+    game_node *game = find_game_by_player(client);
+    if (!game) {
+        return cJSON_Print(create_ready_to_play_response_failure());
+    }
+
+    if (!game->player1 || !game->player2) {
+        return cJSON_Print(create_ready_to_play_response_failure());
+    }
+
+    game->status = ongoing;
+
+    snprintf(
+        game->player1->send_buffer,
+        BUFFER_SIZE,
+        "%s",
+        cJSON_Print(create_alert_start_game_success())
+    );
+    send_packet(game->player1);
+
+    return cJSON_Print(create_alert_start_game_success());
 }
 
 void handle_client_response_type(client_node *client, const char *request_type, const cJSON *json) {
@@ -866,10 +954,12 @@ void handle_client_response_type(client_node *client, const char *request_type, 
         response_string = handle_get_lobby_response();
     } else if (strcmp(request_type, DISCONNECT_VERB) == 0) {
         response_string = handle_disconnect_response(client);
-    } else if (strcasecmp(request_type, CREATE_GAME_VERB) == 0) {
+    } else if (strcmp(request_type, CREATE_GAME_VERB) == 0) {
         response_string = handle_create_game_response(json, client);
-    } else if (strcasecmp(request_type, JOIN_GAME_VERB) == 0) {
+    } else if (strcmp(request_type, JOIN_GAME_VERB) == 0) {
         response_string = handle_join_game_response(json, client);
+    } else if (strcmp(request_type, READY_TO_PLAY_VERB) == 0) {
+        response_string = handle_ready_to_play_response(client);
     } else {
         response_string = cJSON_Print(create_unknow_response());
     }

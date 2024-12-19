@@ -1,4 +1,5 @@
 import json
+import re
 import socket
 
 import pygame
@@ -63,6 +64,9 @@ GANDALF_IMAGE_PATH = "assets/images/gandalf.png"
 # Status de la réponse (JSON)
 RESPONSE_SUCCESS_STATUS = 1
 RESPONSE_FAIL_STATUS = 0
+
+# Regex's
+REGEX_CAPTURE_GAME_NAME = r"Name:\s*(.*?)\s*Status:"
 
 # player stats
 score = 0
@@ -176,6 +180,16 @@ def connect_to_server(host, port):
     print("Connecté au serveur.")
 
     return user_socket
+
+
+def create_ready_to_play_message():
+    try:
+        return json.dumps({
+            "type": "ready_to_play"
+        })
+    except Exception as e:
+        print(f"Erreur lors de l'envoi du message : {e}")
+        return None
 
 
 def create_auth_json(username, password):
@@ -654,6 +668,13 @@ def handle_server_response(manager, user_socket, current_page_elements, current_
                 current_page_elements,
                 manager
             )
+        elif response_type == "join_game_response":
+            return handle_join_game_response(
+                response_json,
+                current_page_elements,
+                manager,
+                user_socket
+            )
 
         return True, current_page_elements, current_event_handler
 
@@ -719,6 +740,24 @@ def create_gui_join_game_button_element(game_json, manager, index):
         manager=manager,
         object_id=f"#button_game_{game_id}"
     )
+
+
+def handle_join_game_response(response_json, current_page_elements, manager, user_socket):
+    response_status = response_json.get("status", None)
+
+    if (
+            response_status is None or
+            not response_status == RESPONSE_SUCCESS_STATUS
+    ):
+        current_page_elements["error_label"].set_text("Partie complète ou impossible à rejoindre.")
+        return response_status is not None, current_page_elements, handle_events_on_lobby_page
+
+    clear_page(current_page_elements)
+    game_page_elements = create_gui_game_page(manager)
+
+    send_json(user_socket, create_ready_to_play_message())
+
+    return True, game_page_elements, handle_events_on_game_page
 
 
 def handle_create_game_response(response_json, current_page_elements, manager):
@@ -931,10 +970,9 @@ def handle_events_on_lobby_page(manager, lobby_page_elements, user_socket):
 
             elif event.ui_element in lobby_page_elements["game_buttons"]:
                 clicked_button_index = lobby_page_elements["game_buttons"].index(event.ui_element)
-                print(f"Joining game {lobby_page_elements["game_buttons"][clicked_button_index].text}")
-                clear_page(lobby_page_elements)
-                create_game_elements = create_gui_game_page(manager)
-                return True, create_game_elements, handle_events_on_game_page
+                button_text = lobby_page_elements["game_buttons"][clicked_button_index].text
+                match = re.search(REGEX_CAPTURE_GAME_NAME, button_text)
+                send_json(user_socket, create_join_game_json(match.group(1)))
 
             elif event.ui_element == lobby_page_elements["disconnect_button"]:
                 print("Déconnexion.")
