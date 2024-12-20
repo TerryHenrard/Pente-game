@@ -17,16 +17,30 @@ pygame.mixer.init()
 
 # Configuration de PyGame
 # Configuration de l'écran
-SCREEN_WIDTH = 900
-SCREEN_HEIGHT = 600
+SCREEN_WIDTH = 1125
+SCREEN_HEIGHT = 750
 SCREEN = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Plateau de Pente")
 
 # Dimensions du plateau
 GRID_ROWS = 19
 GRID_COLS = 19
-CASE_SIZE = 40
-PIECE_SIZE = 36
+CELL_SIZE = 38
+PIECE_SIZE = 34
+
+# Images des pions
+PION_IMAGE_PLAYER1 = pygame.image.load("assets/images/anneau_unique_pion.png")
+PION_IMAGE_PLAYER2 = pygame.image.load("assets/images/eye_of_sauron_pion.png")
+
+# Tolérance pour cliquer autour des intersections (en pixels)
+TOLERANCE = 5
+
+# Dimensions de la grille
+GRID_SIZE = (GRID_COLS - 1) * CELL_SIZE
+
+# Calculer les marges pour centrer la grille
+MARGIN_X = (SCREEN_WIDTH - GRID_SIZE) // 2
+MARGIN_Y = (SCREEN_HEIGHT - GRID_SIZE) // 2 + 20
 
 # Buttons dimensions
 BUTTON_WIDTH = 200
@@ -126,32 +140,51 @@ def draw_image(surface, image_path, position):
 
 # Fonction pour dessiner la grille
 def draw_grid(surface):
+    # dessiner les lignes verticales
     for x in range(GRID_COLS):
         pygame.draw.line(
             surface,
             LINE_COLOR,
-            (x * CASE_SIZE, 0),
-            (x * CASE_SIZE, CASE_SIZE * GRID_ROWS)
+            (MARGIN_X + x * CELL_SIZE, MARGIN_Y),
+            (MARGIN_X + x * CELL_SIZE, MARGIN_Y + GRID_SIZE)
         )
+
+    # Dessiner les lignes horizontales
     for y in range(GRID_ROWS):
         pygame.draw.line(
             surface,
             LINE_COLOR,
-            (0, y * CASE_SIZE),
-            (CASE_SIZE * GRID_COLS, y * CASE_SIZE)
+            (MARGIN_X, MARGIN_Y + y * CELL_SIZE),
+            (MARGIN_X + GRID_SIZE, MARGIN_Y + y * CELL_SIZE)
         )
 
 
 # Fonction pour dessiner un pion
-def draw_pion(surface, color, position, size):
-    pion_surface = pygame.Surface((size, size), pygame.SRCALPHA)
-    pygame.draw.circle(
-        pion_surface,
-        color,
-        (size // 2, size // 2),
-        size // 2
-    )
-    surface.blit(pion_surface, position)
+def draw_pion(x, y, image):
+    # Vérifie si le clic est dans les limites de la grille
+    if not (
+            0 <= x <= GRID_COLS * CELL_SIZE and
+            0 <= y <= GRID_ROWS * CELL_SIZE
+    ):
+        return
+
+    # Calcul des indices de la grille
+    col = x // CELL_SIZE
+    row = y // CELL_SIZE
+
+    print("tentative de placement")
+    # Vérifie si les indices sont valides
+    if 0 <= col < GRID_COLS and 0 <= row < GRID_ROWS:
+        # Calcul de la position en pixels de l'image
+        img_x = MARGIN_X + col * CELL_SIZE
+        img_y = MARGIN_Y + row * CELL_SIZE
+
+        # Affiche l'image
+        SCREEN.blit(image, (img_x, img_y))
+        pygame.display.flip()  # Met à jour l'écran
+        print(f"Image placée à : Ligne {row + 1}, Colonne {col + 1}")
+    else:
+        print("Clic en dehors de la grille.")
 
 
 def send_json(user_socket, json_message):
@@ -605,7 +638,7 @@ def create_gui_elements_game_page(manager):
     return {
         "title_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 300, SCREEN_HEIGHT // 2 - 300),
+                (SCREEN_WIDTH // 2 - 300, 0),
                 (600, 60)
             ),
             text="Partie",
@@ -989,14 +1022,49 @@ def handle_events_on_create_new_game_page(manager, new_game_page_elements, user_
     return True, new_game_page_elements, handle_events_on_create_new_game_page
 
 
-def handle_events_on_game_page(manager, join_game_page_elements, user_socket):
+def get_grid_coordinates(x, y):
+    # Ajustement avec les décalages
+    adjusted_x = x - MARGIN_X
+    adjusted_y = y - MARGIN_Y
+
+    # Vérifie si le clic est dans la zone étendue avec tolérance
+    if not (
+            -TOLERANCE <= adjusted_x <= GRID_SIZE + TOLERANCE and
+            -TOLERANCE <= adjusted_y <= GRID_SIZE + TOLERANCE
+    ):
+        return -1, -1
+
+    # Calcul des indices de la grille
+    col = round(adjusted_x / CELL_SIZE)
+    row = round(adjusted_y / CELL_SIZE)
+
+    # Vérifie si les indices sont dans les limites de la grille
+    if not (0 <= col < GRID_COLS and 0 <= row < GRID_ROWS):
+        return -1, -1
+
+    return col, row
+
+
+def handle_events_on_game_page(manager, page_game_elements, user_socket):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False, None, None
 
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            col, row = get_grid_coordinates(*event.pos)
+
+            if (col, row) == (-1, -1):
+                print("Clic en dehors de la grille.")
+                page_game_elements["error_label"].set_text("Clic en dehors de la grille.")
+                return True, page_game_elements, handle_events_on_game_page
+
+            print("Placement du pion")
+            draw_pion(col, row, PION_IMAGE_PLAYER1)
+            pygame.display.flip()
+
         manager.process_events(event)
 
-    return True, join_game_page_elements, handle_events_on_game_page
+    return True, page_game_elements, handle_events_on_game_page
 
 
 def handle_events_on_lobby_page(manager, lobby_page_elements, user_socket):
