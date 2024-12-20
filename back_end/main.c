@@ -1,5 +1,3 @@
-// FIXME: Client n'est pas retiré de la liste quand il se déconnecte
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -308,6 +306,11 @@ int remove_client_from_list(const int client_socket) {
             printf("Suppression du client %s\n", entry->username);
             *current = entry->next; // Supprimer le client de la liste
             free(entry); // Libérer la mémoire associée au client
+            active_connections--;
+            const game_node *game = find_game_by_player(entry);
+            if (game && game->status == waiting) {
+                remove_game_from_list(game->id);
+            }
 
             if (*current == NULL) {
                 head_linked_list_client = NULL; // Si la liste est vide, assigner NULL à la tête
@@ -380,6 +383,7 @@ int remove_game_from_list(const int game_id) {
                 head_linked_list_game = NULL;
             }
 
+            printf("Game removed\n");
             return 1; // Game found and removed
         }
         current = &entry->next; // Move to the next game
@@ -432,7 +436,10 @@ void run_server_loop(const int server_socket) {
         }
 
         // Attendre l'activité sur un descripteur
-        const int activity = select(max_fd + 1, &read_fds, NULL, NULL, NULL);
+        struct timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 1000;
+        const int activity = select(max_fd + 1, &read_fds, NULL, NULL, &timeout);
         if (activity < 0) {
             perror("Erreur avec select");
             exit(EXIT_FAILURE);
