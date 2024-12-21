@@ -9,16 +9,18 @@
 
 #include "cJSON.h"                      // Bibliothèque pour manipuler des objets JSON
 
-#define PORT 55555                      // Port sur lequel le serveur écoute
-#define BUFFER_SIZE 1024                // Taille du buffer pour les messages
-#define MAX_CONNECTIONS 10              // Nombre maximum de connexions actives
+#define PORT 55555                             // Port sur lequel le serveur écoute
+#define BUFFER_SIZE 2048                       // Taille du buffer pour les messages
+#define MAX_CONNECTIONS 10                     // Nombre maximum de connexions actives
 
-#define AUTHENTICATION_VERB "auth"      // Verbe attendu pour l'authentification
-#define NEW_ACCOUNT_VERB "new_account"  // Verbe attendu pour la création d'un nouveau compte
-#define GET_LOBBY_VERB "get_lobby"      // Verbe attendu pour obtenir la liste des parties en attente
-#define DISCONNECT_VERB "disconnect"    // Verbe attendu pour la déconnexion
-#define CREATE_GAME_VERB "create_game"  // Verbe attendu pour la création d'une nouvelle partie
-#define JOIN_GAME_VERB "join_game"      // Verbe attendu pour rejoindre une partie
+#define BOARD_SIZE 19                          // Taille du plateau de jeu
+
+#define AUTHENTICATION_VERB "auth"             // Verbe attendu pour l'authentification
+#define NEW_ACCOUNT_VERB "new_account"         // Verbe attendu pour la création d'un nouveau compte
+#define GET_LOBBY_VERB "get_lobby"             // Verbe attendu pour obtenir la liste des parties en attente
+#define DISCONNECT_VERB "disconnect"           // Verbe attendu pour la déconnexion
+#define CREATE_GAME_VERB "create_game"         // Verbe attendu pour la création d'une nouvelle partie
+#define JOIN_GAME_VERB "join_game"             // Verbe attendu pour rejoindre une partie
 #define READY_TO_PLAY_VERB "ready_to_play"     // Verbe attendu pour signaler que le joueur est prêt à commencer la partie
 
 
@@ -70,6 +72,8 @@ typedef struct game_node {
     client_node *player1;
     client_node *player2;
     game_status status; // "waiting" or "ongoing"
+    char board[BOARD_SIZE][BOARD_SIZE]; // '-' = empty, 'x' = player1, 'o' = player2
+    int current_player; // 1 or 2
     struct game_node *next;
 } game_node;
 
@@ -141,6 +145,8 @@ cJSON *create_ready_to_play_response_failure();
 
 cJSON *create_alert_start_game_success();
 
+cJSON *board_to_json(const char board[BOARD_SIZE][BOARD_SIZE]);
+
 cJSON *create_alert_start_game_failure();
 
 void print_game_info(const game_node *game);
@@ -170,6 +176,10 @@ void finish_game(game_node *game);
 void complete_client_node(client_node *client, const cJSON *json);
 
 void empty_client(client_node *client);
+
+void print_board(const char board[BOARD_SIZE][BOARD_SIZE]);
+
+void initialize_board(char board[BOARD_SIZE][BOARD_SIZE]);
 
 // Fonction principale
 int main() {
@@ -698,10 +708,51 @@ cJSON *create_player_stat_json(const player_stat *player_stats) {
     return player_stats_json;
 }
 
-cJSON *create_alert_start_game_success() {
+cJSON *board_to_json(const char board[BOARD_SIZE][BOARD_SIZE]) {
+    cJSON *json_board = cJSON_CreateArray();
+    if (!json_board) {
+        fprintf(stderr, "Erreur : Impossible de créer un tableau JSON.\n");
+        return NULL;
+    }
+
+    for (int y = 0; y < BOARD_SIZE; y++) {
+        cJSON *json_row = cJSON_CreateArray();
+        if (!json_row) {
+            fprintf(stderr, "Erreur : Impossible de créer une ligne JSON.\n");
+            cJSON_Delete(json_board); // Libération en cas d'erreur
+            return NULL;
+        }
+
+        for (int x = 0; x < BOARD_SIZE; x++) {
+            const char cell[2] = {board[y][x], '\0'}; // Convertir le caractère en chaîne
+            cJSON_AddItemToArray(json_row, cJSON_CreateString(cell));
+        }
+
+        cJSON_AddItemToArray(json_board, json_row);
+    }
+
+    return json_board;
+}
+
+void initialize_board(char board[BOARD_SIZE][BOARD_SIZE]) {
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            board[i][j] = '-';
+        }
+    }
+    board[9][9] = 'x';
+    printf("Board initialized\n");
+}
+
+cJSON *create_alert_start_game_success(const game_node *game) {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "alert_start_game");
     cJSON_AddNumberToObject(response, "status", success);
+
+    cJSON *board = board_to_json(game->board);
+    cJSON_AddItemToObject(response, "board", board);
+
+    print_board(game->board);
 
     return response;
 }
@@ -713,6 +764,7 @@ cJSON *create_alert_start_game_failure() {
 
     return response;
 }
+
 
 void complete_client_node(client_node *client, const cJSON *json) {
     const cJSON *username = cJSON_GetObjectItemCaseSensitive(json, "username");
@@ -762,6 +814,23 @@ void empty_client(client_node *client) {
     client->player_stats.wins = 0;
     client->player_stats.losses = 0;
     client->player_stats.games_played = 0;
+}
+
+void print_board(const char board[BOARD_SIZE][BOARD_SIZE]) {
+    printf("   ");
+    for (int x = 0; x < BOARD_SIZE; x++) {
+        printf("%2d ", x + 1); // Affiche les numéros de colonnes
+    }
+    printf("\n");
+
+    for (int y = 0; y < BOARD_SIZE; y++) {
+        printf("%2d ", y + 1); // Affiche les numéros de lignes
+        for (int x = 0; x < BOARD_SIZE; x++) {
+            printf(" %c ", board[y][x]); // Affiche directement le contenu de la case
+        }
+        printf("\n");
+    }
+    printf("\n");
 }
 
 char *handle_auth_response(const cJSON *json, client_node *client) {
@@ -938,16 +1007,18 @@ char *handle_ready_to_play_response(const client_node *client) {
     }
 
     game->status = ongoing;
+    game->current_player = 1;
+    initialize_board(game->board);
 
     snprintf(
         game->player1->send_buffer,
         BUFFER_SIZE,
         "%s",
-        cJSON_Print(create_alert_start_game_success())
+        cJSON_Print(create_alert_start_game_success(game))
     );
     send_packet(game->player1);
 
-    return cJSON_Print(create_alert_start_game_success());
+    return cJSON_Print(create_alert_start_game_success(game));
 }
 
 void handle_client_response_type(client_node *client, const char *request_type, const cJSON *json) {
