@@ -1,3 +1,5 @@
+# TODO : ajouter un bouton refresh qui rafraichit le lobby
+
 import json
 import re
 import socket
@@ -25,33 +27,24 @@ pygame.display.set_caption("Plateau de Pente")
 # Dimensions du plateau
 GRID_ROWS = 19
 GRID_COLS = 19
+GRID_SIZE = GRID_ROWS * GRID_COLS
 CELL_SIZE = 45
 PIECE_SIZE = 40
 
-# Images des pions
-PION_IMAGE_PLAYER1 = (
-    pygame.transform.scale(
-        pygame.image.load("assets/images/one_ring_pion.png"),
-        (PIECE_SIZE, PIECE_SIZE)
-    )
-)
-PION_IMAGE_PLAYER2 = (
-    pygame.transform.scale(
-        pygame.image.load(
-            "assets/images/eye_of_sauron_pion.png"),
-        (PIECE_SIZE, PIECE_SIZE)
-    )
-)
+# Caractères des pions
+HOST_CHAR = 'x'
+OPPONENT_CHAR = 'o'
+EMPTY_CHAR = '-'
 
 # Tolérance pour cliquer autour des intersections (en pixels)
 TOLERANCE = 5
 
 # Dimensions de la grille
-GRID_SIZE = (GRID_COLS - 1) * CELL_SIZE
+GRID_DIMENSIONS = (GRID_COLS - 1) * CELL_SIZE
 
 # Calculer les marges pour centrer la grille
-MARGIN_X = (SCREEN_WIDTH - GRID_SIZE) // 2
-MARGIN_Y = (SCREEN_HEIGHT - GRID_SIZE) // 2 + 20
+MARGIN_X = (SCREEN_WIDTH - GRID_DIMENSIONS) // 2
+MARGIN_Y = (SCREEN_HEIGHT - GRID_DIMENSIONS) // 2 + 20
 
 # Buttons dimensions
 BUTTON_WIDTH = 200
@@ -72,8 +65,32 @@ LABEL_LEFT_MARGIN = 5
 # Couleurs
 BACKGROUND_COLOR = (193, 176, 150)
 LINE_COLOR = (0, 0, 0)
-RED_PION_COLOR = (255, 0, 0, 150)
-YELLOW_PION_COLOR = (255, 215, 0, 150)
+
+# Images des pions
+PION_IMAGE_HOST = pygame.image.load("assets/images/one_ring_pion.png")
+PION_IMAGE_HOST_SCALED = (
+    pygame.transform.scale(
+        PION_IMAGE_HOST,
+        (PIECE_SIZE, PIECE_SIZE)
+    )
+)
+HOST_PION_LOGO_X = 10
+HOST_PION_LOGO_Y = 250
+HOST_PION_LOGO_WIDTH = 200
+HOST_PION_LOGO_HEIGHT = 200
+
+PION_IMAGE_OPPONENT = pygame.image.load("assets/images/eye_of_sauron_pion.png")
+PION_IMAGE_OPPONENT_SCALED = (
+    pygame.transform.scale(
+        PION_IMAGE_OPPONENT,
+        (PIECE_SIZE, PIECE_SIZE)
+    )
+)
+
+OPPONENT_PION_LOGO_WIDTH = 200
+OPPONENT_PION_LOGO_HEIGHT = 200
+OPPONENT_PION_LOGO_X = SCREEN_WIDTH - OPPONENT_PION_LOGO_WIDTH - BUTTON_LEFT_RIGHT_MARGIN
+OPPONENT_PION_LOGO_Y = 250
 
 # Chemins des fichiers theme
 THEME_PATH = "assets/styles/theme.json"
@@ -93,7 +110,7 @@ RESPONSE_FAIL_STATUS = 0
 # Regex's
 REGEX_CAPTURE_GAME_NAME = r"Name:\s*(.*?)\s*Status:"
 
-# Statistiques des joueurs
+# Statistiques du joueur connecté
 score = 0
 wins = 0
 losses = 0
@@ -101,26 +118,13 @@ games_played = 0
 
 # Afficher le plateau de jeu
 is_grid_visible = False
-board = []
+is_board_visible = False
+board = ""
+
+# Info de la partie
 game_name = ""
-player1_name = ""
-player2_name = ""
-
-# Liste des pions
-pions = []
-
-
-def rebuild_board(received_board):
-    copy_board = []
-    for y in range(0, len(received_board)):
-        row = []
-        for x in range(0, len(received_board[y])):
-            pion_type = received_board[x][y]
-            row.append(pion_type)
-            pions.append((x, y, pion_type))
-        board.append(row)
-
-    return copy_board
+player_name = ""
+is_host = False
 
 
 def play_music(music_path, volume=1, fade_ms=0, is_loop=False):
@@ -161,30 +165,22 @@ def play_audio(sound_path, volume=0.1):
         print(f"Erreur lors de la lecture de l'audio : {e}")
 
 
-def add_pion_to_pions_list(x, y, image):
-    print("tentative d'ajout")
-    # Vérifie si les indices sont valides
-    if 0 <= x < GRID_COLS and 0 <= y < GRID_ROWS:
-        print(f"Image ajoutée au tableau à : Ligne {y + 1}, Colonne {x + 1}")
-        pions.append((x, y, image))
-    else:
-        print("Clic en dehors de la grille.")
+def draw_board():
+    for y in range(GRID_ROWS):
+        for x in range(GRID_COLS):
+            cell = board[y * GRID_COLS + x]
+            # Calcul de la position en pixels de l'image
+            img_x = (MARGIN_X + (x * CELL_SIZE) - (PIECE_SIZE // 2))
+            img_y = (MARGIN_Y + (y * CELL_SIZE) - (PIECE_SIZE // 2))
 
+            pion_image = None
+            if cell == HOST_CHAR:
+                pion_image = PION_IMAGE_HOST_SCALED
+            elif cell == OPPONENT_CHAR:
+                pion_image = PION_IMAGE_OPPONENT_SCALED
 
-def draw_pions_list():
-    for pion in pions:
-        # Calcul de la position en pixels de l'image
-        img_x = (MARGIN_X + (pion[0] * CELL_SIZE) - (PIECE_SIZE // 2))
-        img_y = (MARGIN_Y + (pion[1] * CELL_SIZE) - (PIECE_SIZE // 2))
-
-        pion_image = None
-        if pion[2] == 'x':
-            pion_image = PION_IMAGE_PLAYER1
-        elif pion[2] == 'o':
-            pion_image = PION_IMAGE_PLAYER2
-
-        if pion_image is not None:
-            SCREEN.blit(pion_image, (img_x, img_y))
+            if pion_image is not None:
+                SCREEN.blit(pion_image, (img_x, img_y))
 
 
 # Fonction pour dessiner la grille et les points "hoshi"
@@ -196,7 +192,7 @@ def draw_grid(surface):
             surface,
             LINE_COLOR,
             (MARGIN_X + x * CELL_SIZE, MARGIN_Y),
-            (MARGIN_X + x * CELL_SIZE, MARGIN_Y + GRID_SIZE),
+            (MARGIN_X + x * CELL_SIZE, MARGIN_Y + GRID_DIMENSIONS),
             width
         )
 
@@ -207,7 +203,7 @@ def draw_grid(surface):
             surface,
             LINE_COLOR,
             (MARGIN_X, MARGIN_Y + y * CELL_SIZE),
-            (MARGIN_X + GRID_SIZE, MARGIN_Y + y * CELL_SIZE),
+            (MARGIN_X + GRID_DIMENSIONS, MARGIN_Y + y * CELL_SIZE),
             width
         )
 
@@ -261,6 +257,16 @@ def connect_to_server(host, port):
     print("Connecté au serveur.")
 
     return user_socket
+
+
+def create_quit_game_json():
+    try:
+        return json.dumps({
+            "type": "quit_game"
+        })
+    except Exception as e:
+        print(f"Erreur lors de l'envoi du message : {e}")
+        return None
 
 
 def create_ready_to_play_message():
@@ -351,6 +357,14 @@ def create_background():
     background = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
     background.fill(BACKGROUND_COLOR)
     return background
+
+
+def draw_pion(x, y, width, heigth, image_surface, manager):
+    return pygame_gui.elements.UIImage(
+        relative_rect=pygame.Rect((x, y), (width, heigth)),  # Position et taille
+        image_surface=image_surface,
+        manager=manager
+    )
 
 
 # Fonction pour créer le gestionnaire GUI et les éléments
@@ -713,19 +727,19 @@ def create_gui_elements_game_page(manager):
         "player1_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
                 (
-                    MARGIN_X // 10,
+                    MARGIN_X // 11,
                     MARGIN_Y
                 ),
                 (200, 30)
             ),
-            text="",
+            text="Player 1: ",
             manager=manager,
             object_id="#player1_label"
         ),
         "player2_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
                 (
-                    MARGIN_X + GRID_SIZE + (MARGIN_X//10),
+                    MARGIN_X + GRID_DIMENSIONS + (MARGIN_X // 10),
                     MARGIN_Y
                 ),
                 (200, 30)
@@ -739,22 +753,119 @@ def create_gui_elements_game_page(manager):
                 (
                     SCREEN_WIDTH - BUTTON_WIDTH - BUTTON_LEFT_RIGHT_MARGIN,
                     SCREEN_HEIGHT - BUTTON_BOTTOM_MARGIN
-                 ),
+                ),
                 (BUTTON_WIDTH, BUTTON_HEIGHT)
             ),
             text="Quitter la partie",
             manager=manager,
             object_id="#quit_button"
-        )
+        ),
+        "score_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (
+                    LABEL_LEFT_MARGIN,
+                    BUTTON_BETWEEN_MARGIN + 100
+                ),
+                (LABEL_WIDTH, LABEL_HEIGHT)
+            ),
+            text="score_label",
+            manager=manager,
+            object_id="#score_label"
+        ),
+        "wins_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (
+                    LABEL_LEFT_MARGIN,
+                    LABEL_HEIGHT + ((3 / 2) * BUTTON_BETWEEN_MARGIN) + 100
+                ),
+                (LABEL_WIDTH, LABEL_HEIGHT)
+            ),
+            text="wins_label",
+            manager=manager,
+            object_id="#wins_label"
+        ),
+        "losses_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (
+                    LABEL_LEFT_MARGIN,
+                    2 * (LABEL_HEIGHT + BUTTON_BETWEEN_MARGIN) + 100
+                ),
+                (LABEL_WIDTH, LABEL_HEIGHT)
+            ),
+            text="losses_label",
+            manager=manager,
+            object_id="#losses_label"
+        ),
+        "games_played_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (
+                    LABEL_LEFT_MARGIN,
+                    3 * (LABEL_HEIGHT + BUTTON_BETWEEN_MARGIN) - (BUTTON_BETWEEN_MARGIN // 2) + 100
+                ),
+                (LABEL_WIDTH, LABEL_HEIGHT)
+            ),
+            text="games_played_label",
+            manager=manager,
+            object_id="#games_played_label"
+        ),
+        "opponent_score_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (
+                    SCREEN_WIDTH - LABEL_LEFT_MARGIN - LABEL_WIDTH,
+                    BUTTON_BETWEEN_MARGIN + 100
+                ),
+                (LABEL_WIDTH, LABEL_HEIGHT)
+            ),
+            text="",
+            manager=manager,
+            object_id="#opponent_score_label"
+        ),
+        "opponent_wins_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (
+                    SCREEN_WIDTH - LABEL_LEFT_MARGIN - LABEL_WIDTH,
+                    LABEL_HEIGHT + ((3 / 2) * BUTTON_BETWEEN_MARGIN) + 100
+                ),
+                (LABEL_WIDTH, LABEL_HEIGHT)
+            ),
+            text="",
+            manager=manager,
+            object_id="#opponent_wins_label"
+        ),
+        "opponent_losses_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (
+                    SCREEN_WIDTH - LABEL_LEFT_MARGIN - LABEL_WIDTH,
+                    2 * (LABEL_HEIGHT + BUTTON_BETWEEN_MARGIN) + 100
+                ),
+                (LABEL_WIDTH, LABEL_HEIGHT)
+            ),
+            text="",
+            manager=manager,
+            object_id="#opponent_losses_label"
+        ),
+        "opponent_games_played_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (
+                    SCREEN_WIDTH - LABEL_LEFT_MARGIN - LABEL_WIDTH,
+                    3 * (LABEL_HEIGHT + BUTTON_BETWEEN_MARGIN) - (BUTTON_BETWEEN_MARGIN // 2) + 100
+                ),
+                (LABEL_WIDTH, LABEL_HEIGHT)
+            ),
+            text="",
+            manager=manager,
+            object_id="#opponent_games_played_label"
+        ),
+
     }
 
 
 def print_board(board_param):
-    print("   " + " ".join(f"{x + 1:2}" for x in range(len(board_param[0]))))
+    print("  " + " ".join(f"{x + 1:2}" for x in range(19)))
 
-    for y, row in enumerate(board_param):
+    for y in range(19):
         # Afficher le numéro de ligne suivi de la ligne elle-même
-        print(f"{y + 1:2} " + " ".join(row))
+        print(f"{y + 1:2} " + "  ".join(board_param[y * 19:(y + 1) * 19]))
 
 
 def handle_server_response(manager, user_socket, current_page_elements, current_event_handler):
@@ -766,6 +877,8 @@ def handle_server_response(manager, user_socket, current_page_elements, current_
     Returns :
         bool : True si la connexion reste active, False en cas d'erreur.
     """
+    global is_grid_visible
+
     try:
         # Utiliser select pour vérifier si des données sont disponibles sans bloquer
         ready_to_read, _, _ = select.select([user_socket], [], [], 0.001)
@@ -785,6 +898,8 @@ def handle_server_response(manager, user_socket, current_page_elements, current_
         if response_json.get("type") == "alert_start_game":
             print(f"type\": {response_json.get("type")}")
             print(f"status\": {response_json.get("status")}")
+            print(f"opponent_info: \n")
+            print(response_json.get("opponent_info"))
             print_board(response_json.get("board"))
         else:
             print(json.dumps(response_json, indent=4))
@@ -831,6 +946,13 @@ def handle_server_response(manager, user_socket, current_page_elements, current_
                 response_json,
                 current_page_elements,
                 manager
+            )
+        elif response_type == "quit_game_response":
+            is_grid_visible = False
+            return return_to_lobby_page_with_delay(
+                current_page_elements,
+                manager,
+                0
             )
 
         return True, current_page_elements, current_event_handler
@@ -908,10 +1030,9 @@ def return_to_lobby_page_with_delay(current_page_elements, manager, ms_delay=200
 
 
 def handle_alert_start_game(response_json, current_page_elements, manager):
-    global is_grid_visible, board
+    global is_board_visible, is_grid_visible, board
 
     response_status = response_json.get("status", None)
-
     if (
             response_status is None or
             not response_status == RESPONSE_SUCCESS_STATUS
@@ -922,13 +1043,50 @@ def handle_alert_start_game(response_json, current_page_elements, manager):
     if response_board is None:
         return return_to_lobby_page_with_delay(current_page_elements, manager)
 
-    board = rebuild_board(response_board)
+    board = response_board
+    is_board_visible = True
     is_grid_visible = True
-    current_page_elements["title_label"].set_text(game_name)
-    current_page_elements["player1_label"].set_text(player1_name)
-    #TODO: Récupérer le nom du player 2 peut etre impossible?
-    # Serveur renvoit pas la game avec les deux players
-    #current_page_elements["player2_label"].set_text(player2_name)
+
+    opponent_info = response_json.get("opponent_info", None)
+    if opponent_info is None:
+        return return_to_lobby_page_with_delay(current_page_elements, manager)
+
+    current_page_elements["title_label"].set_text(response_json.get("game_name", "Nom inconnu"))
+    current_page_elements["player1_label"].set_text(player_name)
+    current_page_elements["player2_label"].set_text(opponent_info.get("name", "Nom inconnu"))
+
+    if not is_host:
+        opponent_pion_logo = draw_pion(
+            HOST_PION_LOGO_X,
+            HOST_PION_LOGO_Y,
+            HOST_PION_LOGO_WIDTH,
+            HOST_PION_LOGO_HEIGHT,
+            PION_IMAGE_OPPONENT,
+            manager
+        )
+        host_pion_logo = draw_pion(
+            OPPONENT_PION_LOGO_X,
+            OPPONENT_PION_LOGO_Y,
+            OPPONENT_PION_LOGO_WIDTH,
+            OPPONENT_PION_LOGO_HEIGHT,
+            PION_IMAGE_HOST,
+            manager
+        )
+        current_page_elements["host_pion_logo"] = host_pion_logo
+        current_page_elements["oppenent_pion_logo"] = opponent_pion_logo
+    else:
+        opponent_pion_logo = draw_pion(
+            OPPONENT_PION_LOGO_X,
+            OPPONENT_PION_LOGO_Y,
+            OPPONENT_PION_LOGO_WIDTH,
+            OPPONENT_PION_LOGO_HEIGHT,
+            PION_IMAGE_OPPONENT,
+            manager
+        )
+        current_page_elements["oppenent_pion_logo"] = opponent_pion_logo
+
+    display_player_stats(current_page_elements)
+    display_opponent_stats(current_page_elements, opponent_info)
 
     return True, current_page_elements, handle_events_on_game_page
 
@@ -952,12 +1110,9 @@ def handle_join_game_response(response_json, current_page_elements, manager, use
 
 
 def handle_create_game_response(response_json, current_page_elements, manager):
-    global is_grid_visible, game_name, player1_name
+    global is_grid_visible, is_host, game_name, player_name
 
     response_status = response_json.get("status", None)
-    game_name = response_json.get("game", {}).get("name", None)
-    player1_name = response_json.get("game", {}).get("host", None)
-
     if (
             response_status is None or
             not response_status == RESPONSE_SUCCESS_STATUS
@@ -968,9 +1123,23 @@ def handle_create_game_response(response_json, current_page_elements, manager):
     clear_page(current_page_elements)
     game_page_elements = create_gui_elements_game_page(manager)
     game_page_elements["title_label"].set_text("En attente d'un autre joueur...")
-    game_page_elements["player1_label"].set_text(player1_name)
+    game_page_elements["player1_label"].set_text(f"{player_name}")
+    display_player_stats(game_page_elements)
+
+    game_name = response_json.get("game", {}).get("name", "")
 
     is_grid_visible = True
+    is_host = True
+
+    host_pion_logo = draw_pion(
+        HOST_PION_LOGO_X,
+        HOST_PION_LOGO_Y,
+        HOST_PION_LOGO_WIDTH,
+        HOST_PION_LOGO_HEIGHT,
+        PION_IMAGE_HOST,
+        manager
+    )
+    game_page_elements["host_pion_logo"] = host_pion_logo
 
     return True, game_page_elements, handle_events_on_game_page
 
@@ -1022,19 +1191,52 @@ def handle_disconnect_ack_response(response_json, current_page_elements, manager
     return True, login_page_elements, handle_events_on_login_page
 
 
-def display_player_stats(next_page_elements):
-    next_page_elements["score_label"].set_text(f"Score: {score}")
-    next_page_elements["wins_label"].set_text(f"Victoires: {wins}")
-    next_page_elements["losses_label"].set_text(f"Défaites: {losses}")
-    next_page_elements["games_played_label"].set_text(f"Parties jouées: {games_played}")
+def set_stat_label(page_elements, label_prefix, stats):
+    """
+    Met à jour les labels de statistiques pour un joueur ou un adversaire.
+
+    Args:
+        page_elements (dict) : Dictionnaire des éléments de la page.
+        label_prefix (str) : Préfixe pour différencier les labels (ex : "opponent_" ou "").
+        stats (dict) : Dictionnaire contenant les statistiques à afficher.
+    """
+    (page_elements[f"{label_prefix}score_label"]
+     .set_text(f"Score: {stats.get('score', 'Unknown')}"))
+    (page_elements[f"{label_prefix}wins_label"]
+     .set_text(f"Victoires: {stats.get('wins', 'Unknown')}"))
+    (page_elements[f"{label_prefix}losses_label"]
+     .set_text(f"Défaites: {stats.get('losses', 'Unknown')}"))
+    (page_elements[f"{label_prefix}games_played_label"]
+     .set_text(f"Parties jouées: {stats.get('games_played', 'Unknown')}"))
+
+
+def display_player_stats(page_elements):
+    player_stats = {
+        "score": score,
+        "wins": wins,
+        "losses": losses,
+        "games_played": games_played,
+    }
+    set_stat_label(page_elements, "", player_stats)
+
+
+def display_opponent_stats(page_elements, opponent_stats):
+    opponent_stats_dict = {
+        "score": opponent_stats["score"],
+        "wins": opponent_stats["wins"],
+        "losses": opponent_stats["losses"],
+        "games_played": opponent_stats["games_played"],
+    }
+    set_stat_label(page_elements, "opponent_", opponent_stats_dict)
 
 
 def handle_auth_response(response_json, current_page_elements, manager, user_socket):
-    global score, wins, losses, games_played
+    global score, wins, losses, games_played, player_name
 
     response_status = response_json.get("status", None)
 
     if response_status is None or not response_status == RESPONSE_SUCCESS_STATUS:
+        player_name = ""
         current_page_elements["error_label"].set_text("Mot de passe incorrect !")
         # play_audio(YOU_SHALL_NOT_PASS_PATH)
         return response_status is not None, current_page_elements, handle_events_on_login_page
@@ -1058,6 +1260,7 @@ def handle_auth_response(response_json, current_page_elements, manager, user_soc
 
 
 def handle_login_event(login_page_elements, user_socket):
+    global player_name
     username = login_page_elements["username_entry"].get_text()
     password = login_page_elements["password_entry"].get_text()
 
@@ -1074,10 +1277,14 @@ def handle_login_event(login_page_elements, user_socket):
         print("Erreur lors de la création du message.")
         return
 
+    player_name = username
+
     send_json(user_socket, json_authencation_message)
 
 
 def handle_create_new_account_event(new_account_page_elements, user_socket):
+    global player_name
+
     username = new_account_page_elements["username_entry"].get_text()
     password = new_account_page_elements["password_entry"].get_text()
     conf_password = new_account_page_elements["conf_password_entry"].get_text()
@@ -1103,6 +1310,8 @@ def handle_create_new_account_event(new_account_page_elements, user_socket):
     if not json_new_account_message:
         print("Erreur lors de la création du message.")
         return
+
+    player_name = username
 
     send_json(user_socket, json_new_account_message)
 
@@ -1152,8 +1361,8 @@ def get_grid_coordinates(x, y):
 
     # Vérifie si le clic est dans la zone étendue avec tolérance
     if not (
-            -TOLERANCE <= adjusted_x <= GRID_SIZE + TOLERANCE and
-            -TOLERANCE <= adjusted_y <= GRID_SIZE + TOLERANCE
+            -TOLERANCE <= adjusted_x <= GRID_DIMENSIONS + TOLERANCE and
+            -TOLERANCE <= adjusted_y <= GRID_DIMENSIONS + TOLERANCE
     ):
         return -1, -1
 
@@ -1168,11 +1377,7 @@ def get_grid_coordinates(x, y):
     return col, row
 
 
-i = 0
-
-
 def handle_events_on_game_page(manager, page_game_elements, user_socket):
-    global i
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False, None, None
@@ -1180,20 +1385,16 @@ def handle_events_on_game_page(manager, page_game_elements, user_socket):
         elif event.type == pygame.MOUSEBUTTONDOWN:
             col, row = get_grid_coordinates(*event.pos)
 
-            if (col, row) == (-1, -1):
+            if (col, row) != (-1, -1):
+                print("Placement du pion")
+                # TODO : envoyer le mouvement
+            elif page_game_elements["quit_button"].get_relative_rect().collidepoint(event.pos):
+                print("Abandon de la partie")
+                send_json(user_socket, create_quit_game_json())
+            else:
                 print("Clic en dehors de la grille.")
                 page_game_elements["error_label"].set_text("Clic en dehors de la grille.")
                 return True, page_game_elements, handle_events_on_game_page
-
-            print("Placement du pion")
-            i += 1
-            add_pion_to_pions_list(col, row, PION_IMAGE_PLAYER1 if i % 2 == 0 else PION_IMAGE_PLAYER2)
-
-        #TODO: Rentre toujours dans "Clic en dehors de la grille" meme si placé avant condition grid
-        elif event.type == pygame_gui.UI_BUTTON_PRESSED:
-            if event.ui_element == page_game_elements["quit_button"]:
-                print("Abandon de la partie")
-                #send_json(user_socket, create_get_lobby_json())
 
         manager.process_events(event)
 
@@ -1354,7 +1555,9 @@ def main():
 
             if is_grid_visible:
                 draw_grid(SCREEN)
-                draw_pions_list()
+
+            if is_board_visible:
+                draw_board()
 
             pygame.display.update()
     except Exception as e:

@@ -141,6 +141,38 @@
       "text_horiz_alignment": "left"
     }
   },
+  "#opponent_score_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "right"
+    }
+  },
+  "#opponent_wins_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "right"
+    }
+  },
+  "#opponent_losses_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "right"
+    }
+  },
+  "#opponent_games_played_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "right"
+    }
+  },
   "#button_game_0": {
     "normal_text": "#FFFFFF",
     "hovered_text": "#FFFFE0",
@@ -164,13 +196,13 @@
   "#player1_label": {
     "font": {
       "size": 22,
-        "bold": true
+      "bold": true
     }
   },
   "#player2_label": {
     "font": {
       "size": 22,
-        "bold": true
+      "bold": true
     }
   }
 }
