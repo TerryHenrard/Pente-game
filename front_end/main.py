@@ -64,8 +64,8 @@ BUTTON_GAME_HEIGHT = 45
 BUTTON_GAME_MARGIN = 10
 
 # Labels dimensions
-LABEL_WIDTH = 200
-LABEL_HEIGHT = 20
+LABEL_WIDTH = 300
+LABEL_HEIGHT = 25
 LABEL_MARGIN_BOTTOM = 10
 LABEL_LEFT_MARGIN = 5
 
@@ -102,6 +102,9 @@ games_played = 0
 # Afficher le plateau de jeu
 is_grid_visible = False
 board = []
+game_name = ""
+player1_name = ""
+player2_name = ""
 
 # Liste des pions
 pions = []
@@ -448,7 +451,10 @@ def create_gui_elements_create_game_page(manager):
     return {
         "title_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 300, SCREEN_HEIGHT // 2 - 300),
+                (
+                    SCREEN_WIDTH // 2 - 300,
+                    SCREEN_HEIGHT // 2 - 400
+                ),
                 (600, 60)
             ),
             text="Créer une partie",
@@ -516,7 +522,10 @@ def create_gui_elements_login_page(manager):
     return {
         "title_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 300, SCREEN_HEIGHT // 2 - 300),
+                (
+                    SCREEN_WIDTH // 2 - 300,
+                    SCREEN_HEIGHT // 2 - 400
+                ),
                 (600, 60)
             ),
             text="Se connecter",
@@ -589,7 +598,10 @@ def create_gui_elements_new_account_page(manager):
     return {
         "title_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 300, SCREEN_HEIGHT // 2 - 300),
+                (
+                    SCREEN_WIDTH // 2 - 300,
+                    SCREEN_HEIGHT // 2 - 400
+                ),
                 (600, 60)
             ),
             text="S'inscrire",
@@ -679,7 +691,10 @@ def create_gui_elements_game_page(manager):
     return {
         "title_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 300, 0),
+                (
+                    SCREEN_WIDTH // 2 - 300,
+                    0
+                ),
                 (600, 60)
             ),
             text="",
@@ -694,6 +709,42 @@ def create_gui_elements_game_page(manager):
             text="",
             manager=manager,
             object_id="#error_label_on_game_page"
+        ),
+        "player1_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (
+                    MARGIN_X // 10,
+                    MARGIN_Y
+                ),
+                (200, 30)
+            ),
+            text="",
+            manager=manager,
+            object_id="#player1_label"
+        ),
+        "player2_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (
+                    MARGIN_X + GRID_SIZE + (MARGIN_X//10),
+                    MARGIN_Y
+                ),
+                (200, 30)
+            ),
+            text="",
+            manager=manager,
+            object_id="#player2_label"
+        ),
+        "quit_button": pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(
+                (
+                    SCREEN_WIDTH - BUTTON_WIDTH - BUTTON_LEFT_RIGHT_MARGIN,
+                    SCREEN_HEIGHT - BUTTON_BOTTOM_MARGIN
+                 ),
+                (BUTTON_WIDTH, BUTTON_HEIGHT)
+            ),
+            text="Quitter la partie",
+            manager=manager,
+            object_id="#quit_button"
         )
     }
 
@@ -873,6 +924,11 @@ def handle_alert_start_game(response_json, current_page_elements, manager):
 
     board = rebuild_board(response_board)
     is_grid_visible = True
+    current_page_elements["title_label"].set_text(game_name)
+    current_page_elements["player1_label"].set_text(player1_name)
+    #TODO: Récupérer le nom du player 2 peut etre impossible?
+    # Serveur renvoit pas la game avec les deux players
+    #current_page_elements["player2_label"].set_text(player2_name)
 
     return True, current_page_elements, handle_events_on_game_page
 
@@ -896,9 +952,11 @@ def handle_join_game_response(response_json, current_page_elements, manager, use
 
 
 def handle_create_game_response(response_json, current_page_elements, manager):
-    global is_grid_visible
+    global is_grid_visible, game_name, player1_name
 
     response_status = response_json.get("status", None)
+    game_name = response_json.get("game", {}).get("name", None)
+    player1_name = response_json.get("game", {}).get("host", None)
 
     if (
             response_status is None or
@@ -910,6 +968,7 @@ def handle_create_game_response(response_json, current_page_elements, manager):
     clear_page(current_page_elements)
     game_page_elements = create_gui_elements_game_page(manager)
     game_page_elements["title_label"].set_text("En attente d'un autre joueur...")
+    game_page_elements["player1_label"].set_text(player1_name)
 
     is_grid_visible = True
 
@@ -1129,6 +1188,12 @@ def handle_events_on_game_page(manager, page_game_elements, user_socket):
             print("Placement du pion")
             i += 1
             add_pion_to_pions_list(col, row, PION_IMAGE_PLAYER1 if i % 2 == 0 else PION_IMAGE_PLAYER2)
+
+        #TODO: Rentre toujours dans "Clic en dehors de la grille" meme si placé avant condition grid
+        elif event.type == pygame_gui.UI_BUTTON_PRESSED:
+            if event.ui_element == page_game_elements["quit_button"]:
+                print("Abandon de la partie")
+                #send_json(user_socket, create_get_lobby_json())
 
         manager.process_events(event)
 
