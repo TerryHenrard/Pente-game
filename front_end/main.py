@@ -9,7 +9,7 @@ import select
 # Configuration du serveur
 HOST = '127.0.0.1'  # Adresse IP du serveur (localhost)
 PORT = 55555  # Port du serveur
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 2048
 
 # Initialisation de PyGame et du module audio
 pygame.init()
@@ -17,20 +17,31 @@ pygame.mixer.init()
 
 # Configuration de PyGame
 # Configuration de l'écran
-SCREEN_WIDTH = 1125
-SCREEN_HEIGHT = 750
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 900
 SCREEN = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Plateau de Pente")
 
 # Dimensions du plateau
 GRID_ROWS = 19
 GRID_COLS = 19
-CELL_SIZE = 38
-PIECE_SIZE = 34
+CELL_SIZE = 45
+PIECE_SIZE = 40
 
 # Images des pions
-PION_IMAGE_PLAYER1 = pygame.image.load("assets/images/anneau_unique_pion.png")
-PION_IMAGE_PLAYER2 = pygame.image.load("assets/images/eye_of_sauron_pion.png")
+PION_IMAGE_PLAYER1 = (
+    pygame.transform.scale(
+        pygame.image.load("assets/images/one_ring_pion.png"),
+        (PIECE_SIZE, PIECE_SIZE)
+    )
+)
+PION_IMAGE_PLAYER2 = (
+    pygame.transform.scale(
+        pygame.image.load(
+            "assets/images/eye_of_sauron_pion.png"),
+        (PIECE_SIZE, PIECE_SIZE)
+    )
+)
 
 # Tolérance pour cliquer autour des intersections (en pixels)
 TOLERANCE = 5
@@ -82,14 +93,31 @@ RESPONSE_FAIL_STATUS = 0
 # Regex's
 REGEX_CAPTURE_GAME_NAME = r"Name:\s*(.*?)\s*Status:"
 
-# player stats
+# Statistiques des joueurs
 score = 0
 wins = 0
 losses = 0
 games_played = 0
 
-# afficher le plateau de jeu
+# Afficher le plateau de jeu
 is_grid_visible = False
+board = []
+
+# Liste des pions
+pions = []
+
+
+def rebuild_board(received_board):
+    copy_board = []
+    for y in range(0, len(received_board)):
+        row = []
+        for x in range(0, len(received_board[y])):
+            pion_type = received_board[x][y]
+            row.append(pion_type)
+            pions.append((x, y, pion_type))
+        board.append(row)
+
+    return copy_board
 
 
 def play_music(music_path, volume=1, fade_ms=0, is_loop=False):
@@ -130,61 +158,74 @@ def play_audio(sound_path, volume=0.1):
         print(f"Erreur lors de la lecture de l'audio : {e}")
 
 
-def draw_image(surface, image_path, position):
-    try:
-        image = pygame.image.load(image_path)
-        surface.blit(image, position)
-    except pygame.error as e:
-        print(f"Erreur lors du chargement de l'image : {e}")
+def add_pion_to_pions_list(x, y, image):
+    print("tentative d'ajout")
+    # Vérifie si les indices sont valides
+    if 0 <= x < GRID_COLS and 0 <= y < GRID_ROWS:
+        print(f"Image ajoutée au tableau à : Ligne {y + 1}, Colonne {x + 1}")
+        pions.append((x, y, image))
+    else:
+        print("Clic en dehors de la grille.")
 
 
-# Fonction pour dessiner la grille
+def draw_pions_list():
+    for pion in pions:
+        # Calcul de la position en pixels de l'image
+        img_x = (MARGIN_X + (pion[0] * CELL_SIZE) - (PIECE_SIZE // 2))
+        img_y = (MARGIN_Y + (pion[1] * CELL_SIZE) - (PIECE_SIZE // 2))
+
+        pion_image = None
+        if pion[2] == 'x':
+            pion_image = PION_IMAGE_PLAYER1
+        elif pion[2] == 'o':
+            pion_image = PION_IMAGE_PLAYER2
+
+        if pion_image is not None:
+            SCREEN.blit(pion_image, (img_x, img_y))
+
+
+# Fonction pour dessiner la grille et les points "hoshi"
 def draw_grid(surface):
-    # dessiner les lignes verticales
+    # Dessiner les lignes verticales
     for x in range(GRID_COLS):
+        width = 2 if x == 9 else 1
         pygame.draw.line(
             surface,
             LINE_COLOR,
             (MARGIN_X + x * CELL_SIZE, MARGIN_Y),
-            (MARGIN_X + x * CELL_SIZE, MARGIN_Y + GRID_SIZE)
+            (MARGIN_X + x * CELL_SIZE, MARGIN_Y + GRID_SIZE),
+            width
         )
 
     # Dessiner les lignes horizontales
     for y in range(GRID_ROWS):
+        width = 2 if y == 9 else 1
         pygame.draw.line(
             surface,
             LINE_COLOR,
             (MARGIN_X, MARGIN_Y + y * CELL_SIZE),
-            (MARGIN_X + GRID_SIZE, MARGIN_Y + y * CELL_SIZE)
+            (MARGIN_X + GRID_SIZE, MARGIN_Y + y * CELL_SIZE),
+            width
         )
 
-
-# Fonction pour dessiner un pion
-def draw_pion(x, y, image):
-    # Vérifie si le clic est dans les limites de la grille
-    if not (
-            0 <= x <= GRID_COLS * CELL_SIZE and
-            0 <= y <= GRID_ROWS * CELL_SIZE
-    ):
-        return
-
-    # Calcul des indices de la grille
-    col = x // CELL_SIZE
-    row = y // CELL_SIZE
-
-    print("tentative de placement")
-    # Vérifie si les indices sont valides
-    if 0 <= col < GRID_COLS and 0 <= row < GRID_ROWS:
-        # Calcul de la position en pixels de l'image
-        img_x = MARGIN_X + col * CELL_SIZE
-        img_y = MARGIN_Y + row * CELL_SIZE
-
-        # Affiche l'image
-        SCREEN.blit(image, (img_x, img_y))
-        pygame.display.flip()  # Met à jour l'écran
-        print(f"Image placée à : Ligne {row + 1}, Colonne {col + 1}")
-    else:
-        print("Clic en dehors de la grille.")
+    # Ajouter les points "hoshi"
+    hoshi_points = [
+        (3, 3), (3, 9), (3, 15),
+        (9, 3), (9, 9), (9, 15),
+        (15, 3), (15, 9), (15, 15)
+    ]
+    for px, py in hoshi_points:
+        square_size = 8  # Taille du carré
+        pygame.draw.rect(
+            surface,
+            LINE_COLOR,
+            pygame.Rect(
+                MARGIN_X + px * CELL_SIZE - square_size // 2 + 1,
+                MARGIN_Y + py * CELL_SIZE - square_size // 2 + 0.5,
+                square_size,
+                square_size
+            )
+        )
 
 
 def send_json(user_socket, json_message):
@@ -316,7 +357,7 @@ def create_gui_elements_lobby_page(manager):
             relative_rect=pygame.Rect(
                 (
                     SCREEN_WIDTH // 2 - 300,
-                    SCREEN_HEIGHT // 2 - 300
+                    SCREEN_HEIGHT // 2 - 400
                 ),
                 (600, 60)
             ),
@@ -641,20 +682,28 @@ def create_gui_elements_game_page(manager):
                 (SCREEN_WIDTH // 2 - 300, 0),
                 (600, 60)
             ),
-            text="Partie",
+            text="",
             manager=manager,
             object_id='#new_join_game_title_label'
         ),
         "error_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 + 195),
+                (10, 10),
                 (400, 30)
             ),
             text="",
             manager=manager,
-            object_id="#error_label"
+            object_id="#error_label_on_game_page"
         )
     }
+
+
+def print_board(board_param):
+    print("   " + " ".join(f"{x + 1:2}" for x in range(len(board_param[0]))))
+
+    for y, row in enumerate(board_param):
+        # Afficher le numéro de ligne suivi de la ligne elle-même
+        print(f"{y + 1:2} " + " ".join(row))
 
 
 def handle_server_response(manager, user_socket, current_page_elements, current_event_handler):
@@ -682,7 +731,12 @@ def handle_server_response(manager, user_socket, current_page_elements, current_
 
         # Afficher la réponse de manière lisible
         print("Réponse du serveur :")
-        print(json.dumps(response_json, indent=4))
+        if response_json.get("type") == "alert_start_game":
+            print(f"type\": {response_json.get("type")}")
+            print(f"status\": {response_json.get("status")}")
+            print_board(response_json.get("board"))
+        else:
+            print(json.dumps(response_json, indent=4))
 
         response_type = response_json.get("type")
         # Traiter la réponse en fonction du type de message
@@ -794,8 +848,16 @@ def create_gui_join_game_button_element(game_json, manager, index):
     )
 
 
+def return_to_lobby_page_with_delay(current_page_elements, manager, ms_delay=2000):
+    pygame.time.delay(ms_delay)
+    clear_page(current_page_elements)
+    lobby_page_elements = create_gui_elements_lobby_page(manager)
+    display_player_stats(lobby_page_elements)
+    return True, lobby_page_elements, handle_events_on_lobby_page
+
+
 def handle_alert_start_game(response_json, current_page_elements, manager):
-    global is_grid_visible
+    global is_grid_visible, board
 
     response_status = response_json.get("status", None)
 
@@ -803,12 +865,13 @@ def handle_alert_start_game(response_json, current_page_elements, manager):
             response_status is None or
             not response_status == RESPONSE_SUCCESS_STATUS
     ):
-        pygame.time.delay(2000)
-        clear_page(current_page_elements)
-        lobby_page_elements = create_gui_elements_lobby_page(manager)
-        display_player_stats(lobby_page_elements)
-        return True, lobby_page_elements, handle_events_on_lobby_page
+        return return_to_lobby_page_with_delay(current_page_elements, manager)
 
+    response_board = response_json.get("board", None)
+    if response_board is None:
+        return return_to_lobby_page_with_delay(current_page_elements, manager)
+
+    board = rebuild_board(response_board)
     is_grid_visible = True
 
     return True, current_page_elements, handle_events_on_game_page
@@ -846,6 +909,7 @@ def handle_create_game_response(response_json, current_page_elements, manager):
 
     clear_page(current_page_elements)
     game_page_elements = create_gui_elements_game_page(manager)
+    game_page_elements["title_label"].set_text("En attente d'un autre joueur...")
 
     is_grid_visible = True
 
@@ -1045,7 +1109,11 @@ def get_grid_coordinates(x, y):
     return col, row
 
 
+i = 0
+
+
 def handle_events_on_game_page(manager, page_game_elements, user_socket):
+    global i
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False, None, None
@@ -1059,8 +1127,8 @@ def handle_events_on_game_page(manager, page_game_elements, user_socket):
                 return True, page_game_elements, handle_events_on_game_page
 
             print("Placement du pion")
-            draw_pion(col, row, PION_IMAGE_PLAYER1)
-            pygame.display.flip()
+            i += 1
+            add_pion_to_pions_list(col, row, PION_IMAGE_PLAYER1 if i % 2 == 0 else PION_IMAGE_PLAYER2)
 
         manager.process_events(event)
 
@@ -1221,6 +1289,7 @@ def main():
 
             if is_grid_visible:
                 draw_grid(SCREEN)
+                draw_pions_list()
 
             pygame.display.update()
     except Exception as e:

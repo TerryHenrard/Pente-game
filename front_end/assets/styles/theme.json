@@ -55,6 +55,17 @@
       "normal_text": "#FF0000"
     }
   },
+  "#error_label_on_game_page": {
+    "font": {
+      "size": 20
+    },
+    "colours": {
+      "normal_text": "#FF0000"
+    },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
   "button": {
     "normal_text": "#FFFFFF",
     "hovered_text": "#FFFFE0",
