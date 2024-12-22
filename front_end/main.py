@@ -1,4 +1,6 @@
-# TODO : ajouter un bouton refresh qui rafraichit le lobby
+# TODO: Implémenter des sons aléatoires quand on joue
+# TODO: Implémenter les sons des différentes actions entre les pages
+# TODO: Tchat textuel si le temps
 
 import json
 import re
@@ -11,7 +13,7 @@ import select
 # Configuration du serveur
 HOST = '127.0.0.1'  # Adresse IP du serveur (localhost)
 PORT = 55555  # Port du serveur
-BUFFER_SIZE = 2048
+BUFFER_SIZE = 1048
 
 # Initialisation de PyGame et du module audio
 pygame.init()
@@ -66,49 +68,105 @@ LABEL_LEFT_MARGIN = 5
 BACKGROUND_COLOR = (193, 176, 150)
 LINE_COLOR = (0, 0, 0)
 
-# Images des pions
-PION_IMAGE_HOST = pygame.image.load("assets/images/one_ring_pion.png")
-PION_IMAGE_HOST_SCALED = (
-    pygame.transform.scale(
-        PION_IMAGE_HOST,
-        (PIECE_SIZE, PIECE_SIZE)
-    )
-)
-HOST_PION_LOGO_X = 10
-HOST_PION_LOGO_Y = 270
-HOST_PION_LOGO_WIDTH = 200
-HOST_PION_LOGO_HEIGHT = 200
+# Chemins des fichiers theme
+THEME_PATH = "assets/styles/theme.json"
 
-PION_IMAGE_OPPONENT = pygame.image.load("assets/images/eye_of_sauron_pion.png")
+# Chemin du fichier audio
+BACKGROUND_MUSIC_PATH = "assets/audio/background-music.mp3"
+ERROR_SOUND_PATH = "assets/audio/login-error.wav"
+LOBBY_ENTRY_SOUND_PATH = "assets/audio/lobby-entry.mp3"
+START_GAME_SOUND_PATH = "assets/audio/starting-game.mp3"
+MOVE_FAILED_PATH = "assets/audio/move-fail.wav"
+VICTORY_SOUND_PATH = "assets/audio/victory.mp3"
+DEFEAT_SOUND_PATH = "assets/audio/defeat.mp3.mp3"
+
+# Chemin des fichiers image
+GANDALF_IMAGE_PATH = "assets/images/gandalf.png"
+EYE_OF_SAURON_IMAGE_PATH = "assets/images/eye_of_sauron_pion.png"
+GOLLUM_IMAGE_PATH = "assets/images/gollum.png"
+ONE_RING_IMAGE_PATH = "assets/images/one_ring_pion.png"
+SAURON_IMAGE_PATH = "assets/images/sauron.png"
+NAZGUL_IMAGE_PATH = "assets/images/nazgul.png"
+KING_WITCH_OF_ANGMAR_IMAGE_PATH = "assets/images/king_witch_of_angmar.png"
+YOUNG_BILBO_IMAGE_PATH = "assets/images/young_bilbo.png"
+OLD_BILBO_IMAGE_PATH = "assets/images/old_bilbo.png"
+
+# Charger les images
+GANDALF_IMAGE = pygame.image.load(GANDALF_IMAGE_PATH)
+SAURON_IMAGE = pygame.image.load(SAURON_IMAGE_PATH)
+GOLLUM_IMAGE = pygame.image.load(GOLLUM_IMAGE_PATH)
+NAZGUL_IMAGE = pygame.image.load(NAZGUL_IMAGE_PATH)
+KING_WITCH_OF_ANGMAR_IMAGE = pygame.image.load(KING_WITCH_OF_ANGMAR_IMAGE_PATH)
+YOUNG_BILBO_IMAGE = pygame.image.load(YOUNG_BILBO_IMAGE_PATH)
+OLD_BILBO_IMAGE = pygame.image.load(OLD_BILBO_IMAGE_PATH)
+PION_IMAGE_HOST = pygame.image.load(ONE_RING_IMAGE_PATH)
+PION_IMAGE_OPPONENT = pygame.image.load(EYE_OF_SAURON_IMAGE_PATH)
 PION_IMAGE_OPPONENT_SCALED = (
     pygame.transform.scale(
         PION_IMAGE_OPPONENT,
         (PIECE_SIZE, PIECE_SIZE)
     )
 )
+PION_IMAGE_HOST_SCALED = (
+    pygame.transform.scale(
+        PION_IMAGE_HOST,
+        (PIECE_SIZE, PIECE_SIZE)
+    )
+)
 
-OPPONENT_PION_LOGO_WIDTH = 200
-OPPONENT_PION_LOGO_HEIGHT = 200
-OPPONENT_PION_LOGO_X = SCREEN_WIDTH - OPPONENT_PION_LOGO_WIDTH - BUTTON_LEFT_RIGHT_MARGIN
-OPPONENT_PION_LOGO_Y = 270
-
-# Chemins des fichiers theme
-THEME_PATH = "assets/styles/theme.json"
-
-# Chemin du fichier audio
-BACKGROUND_MUSIC_PATH = "assets/audio/background-music.mp3"
-YOU_SHALL_NOT_PASS_PATH = "assets/audio/login-error.wav"
-LOBBY_ENTRY = "assets/audio/lobby-entry.mp3"
-
-# Chemin des fichiers image
-GANDALF_IMAGE_PATH = "assets/images/gandalf.png"
+# Coordonées & dimensions des images
+GANDALF_IMAGE_X = 10
+GANDALF_IMAGE_Y = 200
+GANDALF_IMAGE_WIDTH = 600
+GANDALF_IMAGE_HEIGHT = 900
+SAURON_IMAGE_X = 640
+SAURON_IMAGE_Y = 200
+SAURON_IMAGE_WIDTH = 592
+SAURON_IMAGE_HEIGHT = 900
+GOLLUM_IMAGE_WIDTH = 415
+GOLLUM_IMAGE_HEIGHT = 640
+GOLLUM_IMAGE_X = -35
+GOLLUM_IMAGE_Y = SCREEN_HEIGHT - GOLLUM_IMAGE_HEIGHT
+NAZGUL_IMAGE_WIDTH = 311
+NAZGUL_IMAGE_HEIGHT = 761
+NAZGUL_IMAGE_X = SCREEN_WIDTH // 2 - 470
+NAZGUL_IMAGE_Y = 350
+KING_WITCH_OF_ANGMAR_IMAGE_WIDTH = 400
+KING_WITCH_OF_ANGMAR_IMAGE_HEIGHT = 812
+KING_WITCH_OF_ANGMAR_IMAGE_X = SCREEN_WIDTH // 2 + 130
+KING_WITCH_OF_ANGMAR_IMAGE_Y = 300
+YOUNG_BILBO_IMAGE_WIDTH = 246
+YOUNG_BILBO_IMAGE_HEIGHT = 640
+YOUNG_BILBO_IMAGE_X = 0
+YOUNG_BILBO_IMAGE_Y = 430
+OLD_BILBO_IMAGE_WIDTH = 237
+OLD_BILBO_IMAGE_HEIGHT = 640
+OLD_BILBO_IMAGE_X = SCREEN_WIDTH - OLD_BILBO_IMAGE_WIDTH
+OLD_BILBO_IMAGE_Y = 430
 
 # Status de la réponse (JSON)
 RESPONSE_SUCCESS_STATUS = 1
 RESPONSE_FAIL_STATUS = 0
 
+# Status de fin de partie
+VICTORY_STATUS = 0
+DEFEAT_STATUS = 1
+WITHDRAW_STATUS = 2
+
 # Regex's
 REGEX_CAPTURE_GAME_NAME = r"Name:\s*(.*?)\s*Status:"
+
+# Logo de l'hôte
+HOST_PION_LOGO_X = 10
+HOST_PION_LOGO_Y = 270
+HOST_PION_LOGO_WIDTH = 200
+HOST_PION_LOGO_HEIGHT = 200
+
+# Logo de l'adversaire
+OPPONENT_PION_LOGO_WIDTH = 200
+OPPONENT_PION_LOGO_HEIGHT = 200
+OPPONENT_PION_LOGO_X = SCREEN_WIDTH - OPPONENT_PION_LOGO_WIDTH - BUTTON_LEFT_RIGHT_MARGIN
+OPPONENT_PION_LOGO_Y = 270
 
 # Statistiques du joueur connecté
 score = 0
@@ -125,7 +183,9 @@ board = ""
 # Info de la partie
 game_name = ""
 player_name = ""
+opponent_name = ""
 is_host = False
+is_my_turn = False
 
 
 def play_music(music_path, volume=1, fade_ms=0, is_loop=False):
@@ -452,6 +512,24 @@ def create_gui_elements_lobby_page(manager):
             manager=manager,
             object_id="#games_played_label"
         ),
+        "young_bilbo_image": pygame_gui.elements.UIImage(
+            relative_rect=pygame
+            .Rect(
+                (YOUNG_BILBO_IMAGE_X, YOUNG_BILBO_IMAGE_Y),
+                (YOUNG_BILBO_IMAGE_WIDTH, YOUNG_BILBO_IMAGE_HEIGHT)
+            ),
+            image_surface=YOUNG_BILBO_IMAGE,
+            manager=manager
+        ),
+        "old_bilbo_image": pygame_gui.elements.UIImage(
+            relative_rect=pygame
+            .Rect(
+                (OLD_BILBO_IMAGE_X, OLD_BILBO_IMAGE_Y),
+                (OLD_BILBO_IMAGE_WIDTH, OLD_BILBO_IMAGE_HEIGHT)
+            ),
+            image_surface=OLD_BILBO_IMAGE,
+            manager=manager
+        ),
         "create_game_button": pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
                 (
@@ -511,6 +589,24 @@ def create_gui_elements_create_game_page(manager):
             manager=manager,
             object_id='#new_game_title_label'
         ),
+        "nazgul_image": pygame_gui.elements.UIImage(
+            relative_rect=pygame
+            .Rect(
+                (NAZGUL_IMAGE_X, NAZGUL_IMAGE_Y),
+                (NAZGUL_IMAGE_WIDTH, NAZGUL_IMAGE_HEIGHT)
+            ),
+            image_surface=NAZGUL_IMAGE,
+            manager=manager
+        ),
+        "king_witch_of_angmar_image": pygame_gui.elements.UIImage(
+            relative_rect=pygame
+            .Rect(
+                (KING_WITCH_OF_ANGMAR_IMAGE_X, KING_WITCH_OF_ANGMAR_IMAGE_Y),
+                (KING_WITCH_OF_ANGMAR_IMAGE_WIDTH, KING_WITCH_OF_ANGMAR_IMAGE_HEIGHT)
+            ),
+            image_surface=KING_WITCH_OF_ANGMAR_IMAGE,
+            manager=manager
+        ),
         "game_name_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
                 (
@@ -565,6 +661,7 @@ def create_gui_elements_create_game_page(manager):
             manager=manager,
             object_id="#error_label"
         )
+
     }
 
 
@@ -574,13 +671,31 @@ def create_gui_elements_login_page(manager):
             relative_rect=pygame.Rect(
                 (
                     SCREEN_WIDTH // 2 - 300,
-                    SCREEN_HEIGHT // 2 - 400
+                    SCREEN_HEIGHT // 2 - 200
                 ),
                 (600, 60)
             ),
             text="Se connecter",
             manager=manager,
             object_id='#login_title_label'
+        ),
+        "gandalf_image": pygame_gui.elements.UIImage(
+            relative_rect=pygame
+            .Rect(
+                (GANDALF_IMAGE_X, GANDALF_IMAGE_Y),
+                (GANDALF_IMAGE_WIDTH, GANDALF_IMAGE_HEIGHT)
+            ),
+            image_surface=GANDALF_IMAGE,
+            manager=manager
+        ),
+        "sauron_image": pygame_gui.elements.UIImage(
+            relative_rect=pygame
+            .Rect(
+                (SAURON_IMAGE_X, SAURON_IMAGE_Y),
+                (SAURON_IMAGE_WIDTH, SAURON_IMAGE_HEIGHT)
+            ),
+            image_surface=SAURON_IMAGE,
+            manager=manager
         ),
         "username_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
@@ -650,7 +765,7 @@ def create_gui_elements_new_account_page(manager):
             relative_rect=pygame.Rect(
                 (
                     SCREEN_WIDTH // 2 - 300,
-                    SCREEN_HEIGHT // 2 - 400
+                    SCREEN_HEIGHT // 2 - 200
                 ),
                 (600, 60)
             ),
@@ -708,6 +823,15 @@ def create_gui_elements_new_account_page(manager):
             ),
             manager=manager,
             object_id="#conf_password_create_account_entry"
+        ),
+        "gollum_image": pygame_gui.elements.UIImage(
+            relative_rect=pygame
+            .Rect(
+                (GOLLUM_IMAGE_X, GOLLUM_IMAGE_Y),
+                (GOLLUM_IMAGE_WIDTH, GOLLUM_IMAGE_HEIGHT)
+            ),
+            image_surface=GOLLUM_IMAGE,
+            manager=manager
         ),
         "create_button": pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
@@ -916,7 +1040,15 @@ def create_gui_elements_game_page(manager):
             manager=manager,
             object_id="#opponent_games_played_label"
         ),
-
+        "instruction_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (SCREEN_WIDTH - LABEL_LEFT_MARGIN - LABEL_WIDTH, 10),
+                (LABEL_WIDTH, 30)
+            ),
+            text="",
+            manager=manager,
+            object_id="#instruction_label_on_game_page"
+        )
     }
 
 
@@ -964,10 +1096,7 @@ def handle_server_response(manager, user_socket, current_page_elements, current_
 
         response_type = response_json.get("type")
         # Traiter la réponse en fonction du type de message
-        if (
-                response_type == "auth_response" or
-                response_type == "new_account_response"
-        ):
+        if response_type in ("auth_response", "new_account_response"):
             return handle_auth_response(
                 response_json,
                 current_page_elements,
@@ -1013,6 +1142,13 @@ def handle_server_response(manager, user_socket, current_page_elements, current_
             )
         elif response_type in ("move_response", "new_board_state"):
             return handle_move_response(
+                response_json,
+                current_page_elements,
+                response_type,
+                manager
+            )
+        elif response_type == "game_over":
+            return handle_game_over_response(
                 response_json,
                 current_page_elements,
                 manager
@@ -1107,8 +1243,8 @@ def handle_quit_game_response(response_json, current_page_elements, manager):
     return return_to_lobby(current_page_elements, manager)
 
 
-def handle_move_response(response_json, current_page_elements, manager):
-    global board
+def handle_move_response(response_json, current_page_elements, response_type, manager):
+    global board, is_my_turn
 
     response_status = response_json.get("status", None)
     response_board = response_json.get("board_state", None)
@@ -1121,14 +1257,53 @@ def handle_move_response(response_json, current_page_elements, manager):
         pygame.time.set_timer(pygame.USEREVENT + 1, 3000)
         return True, current_page_elements, handle_events_on_game_page
 
+    if response_type == "move_response":
+        current_page_elements["instruction_label"].set_text(f"Attendez que {opponent_name} joue.")
+    else:
+        current_page_elements["instruction_label"].set_text(f"À vous de jouer, {player_name} !")
+
+    is_my_turn = not is_my_turn
     board = response_board
     print_board(board)
 
     return True, current_page_elements, handle_events_on_game_page
 
 
+def handle_game_over_response(response_json, current_page_element, manager):
+    global score, losses, wins, games_played, is_board_visible, is_grid_visible
+    response_status = response_json.get("status", None)
+
+    if response_status is None:
+        is_running, next_page_element, next_page_handler = return_to_lobby(current_page_element, manager)
+        next_page_element["error_label"].set_text("Une erreur est survenue, partie finie.")
+        return is_running, next_page_element, next_page_handler
+
+    if response_status == VICTORY_STATUS:
+        current_page_element["instruction_label"].set_text("Vous avez gagné la partie!")
+    elif response_status == DEFEAT_STATUS:
+        current_page_element["instruction_label"].set_text("Vous avez perdu la partie !")
+    elif response_status == WITHDRAW_STATUS:
+        current_page_element["instruction_label"].set_text("Vous avez abandoné la partie!")
+
+    player_stat = response_json.get("player_stats", None)
+    if player_stat is None:
+        is_board_visible = False
+        is_grid_visible = False
+        display_player_stats(current_page_element)
+        return return_to_lobby(current_page_element, manager)
+
+    score = player_stat.get("score", 0)
+    wins = player_stat.get("wins", 0)
+    losses = player_stat.get("losses", 0)
+    games_played = player_stat.get("games_played", 0)
+
+    pygame.time.set_timer(pygame.USEREVENT + 2, 3000)
+
+    return True, current_page_element, handle_events_on_game_page
+
+
 def handle_alert_start_game(response_json, current_page_elements, manager):
-    global is_board_visible, is_grid_visible, board
+    global is_board_visible, is_grid_visible, board, opponent_name, is_my_turn
 
     response_status = response_json.get("status", None)
     if (
@@ -1148,6 +1323,8 @@ def handle_alert_start_game(response_json, current_page_elements, manager):
     opponent_info = response_json.get("opponent_info", None)
     if opponent_info is None:
         return return_to_lobby(current_page_elements, manager)
+
+    opponent_name = opponent_info.get("name", "Nom inconnu")
 
     current_page_elements["title_label"].set_text(response_json.get("game_name", "Nom inconnu"))
     current_page_elements["player1_label"].set_text(player_name)
@@ -1172,6 +1349,8 @@ def handle_alert_start_game(response_json, current_page_elements, manager):
         )
         current_page_elements["host_pion_logo"] = host_pion_logo
         current_page_elements["oppenent_pion_logo"] = opponent_pion_logo
+        current_page_elements["instruction_label"].set_text(f"À vous de jouer, {player_name} !")
+        is_my_turn = not is_my_turn
     else:
         opponent_pion_logo = draw_pion(
             OPPONENT_PION_LOGO_X,
@@ -1182,6 +1361,7 @@ def handle_alert_start_game(response_json, current_page_elements, manager):
             manager
         )
         current_page_elements["oppenent_pion_logo"] = opponent_pion_logo
+        current_page_elements["instruction_label"].set_text(f"Attendez que {opponent_name} joue.")
 
     display_player_stats(current_page_elements)
     display_opponent_stats(current_page_elements, opponent_info)
@@ -1301,16 +1481,12 @@ def set_stat_label(page_elements, label_prefix, stats):
         label_prefix (str) : Préfixe pour différencier les labels (ex : "opponent_" ou "").
         stats (dict) : Dictionnaire contenant les statistiques à afficher.
     """
-    (page_elements[f"{label_prefix}score_label"]
-     .set_text(f"Score: {stats.get('score', 'Unknown')}"))
-    (page_elements[f"{label_prefix}wins_label"]
-     .set_text(f"Victoires: {stats.get('wins', 'Unknown')}"))
-    (page_elements[f"{label_prefix}losses_label"]
-     .set_text(f"Défaites: {stats.get('losses', 'Unknown')}"))
-    (page_elements[f"{label_prefix}forfeits_label"]
-     .set_text(f"Forfaits: {stats.get('forfeits', 'Unknown')}"))
-    (page_elements[f"{label_prefix}games_played_label"]
-     .set_text(f"Parties jouées: {stats.get('games_played', 'Unknown')}"))
+    page_elements[f"{label_prefix}score_label"].set_text(f"Score: {stats.get('score', 'Unknown')}")
+    page_elements[f"{label_prefix}wins_label"].set_text(f"Victoires: {stats.get('wins', 'Unknown')}")
+    page_elements[f"{label_prefix}losses_label"].set_text(f"Défaites: {stats.get('losses', 'Unknown')}")
+    page_elements[f"{label_prefix}forfeits_label"].set_text(f"Forfaits: {stats.get('forfeits', 'Unknown')}")
+    page_elements[f"{label_prefix}games_played_label"].set_text(
+        f"Parties jouées: {stats.get('games_played', 'Unknown')}")
 
 
 def display_player_stats(page_elements):
@@ -1488,6 +1664,7 @@ def get_grid_coordinates(x, y):
 
 
 def handle_events_on_game_page(manager, page_game_elements, user_socket):
+    global is_grid_visible, is_board_visible, is_host
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False, None, None
@@ -1508,6 +1685,16 @@ def handle_events_on_game_page(manager, page_game_elements, user_socket):
 
         elif event.type == pygame.USEREVENT + 1:
             page_game_elements["error_label"].set_text("")
+
+        elif event.type == pygame.USEREVENT + 2:
+            is_grid_visible = False
+            is_board_visible = False
+            is_host = False
+            is_running, next_page_elements, new_events_handler = (
+                return_to_lobby(page_game_elements, manager))
+            display_player_stats(next_page_elements)
+
+            return is_running, next_page_elements, new_events_handler
 
         manager.process_events(event)
 
