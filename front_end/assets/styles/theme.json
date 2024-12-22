@@ -133,6 +133,14 @@
       "text_horiz_alignment": "left"
     }
   },
+  "#forfeits_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
   "#games_played_label": {
     "font": {
       "size": 18
