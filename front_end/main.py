@@ -1270,13 +1270,18 @@ def handle_move_response(response_json, current_page_elements, response_type, ma
 
 
 def handle_game_over_response(response_json, current_page_element, manager):
-    global score, losses, wins, games_played, is_board_visible, is_grid_visible
+    global score, losses, wins, games_played, is_board_visible, is_grid_visible, board
     response_status = response_json.get("status", None)
 
     if response_status is None:
         is_running, next_page_element, next_page_handler = return_to_lobby(current_page_element, manager)
         next_page_element["error_label"].set_text("Une erreur est survenue, partie finie.")
         return is_running, next_page_element, next_page_handler
+
+    temp_board = response_json.get("board", "")
+    if temp_board != "":
+        board = temp_board
+        print_board(board)
 
     if response_status == VICTORY_STATUS:
         current_page_element["instruction_label"].set_text("Vous avez gagné la partie!")
