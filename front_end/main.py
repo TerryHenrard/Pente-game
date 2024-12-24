@@ -75,10 +75,13 @@ THEME_PATH = "assets/styles/theme.json"
 BACKGROUND_MUSIC_PATH = "assets/audio/background-music.mp3"
 ERROR_SOUND_PATH = "assets/audio/login-error.wav"
 LOBBY_ENTRY_SOUND_PATH = "assets/audio/lobby-entry.mp3"
-START_GAME_SOUND_PATH = "assets/audio/starting-game.mp3"
+START_GAME_OPPONENT_SOUND_PATH = "assets/audio/starting-game-opponent.mp3"
+START_GAME_HOST_SOUND_PATH = "assets/audio/starting-game-host.mp3"
 MOVE_FAILED_PATH = "assets/audio/move-fail.wav"
 VICTORY_SOUND_PATH = "assets/audio/victory.mp3"
-DEFEAT_SOUND_PATH = "assets/audio/defeat.mp3.mp3"
+DEFEAT_SOUND_PATH = "assets/audio/defeat.mp3"
+CAPTURE_SOUND_PATH = "assets/audio/capture.mp3"
+FORFEIT_SOUND_PATH = "assets/audio/forfeit.mp3"
 
 # Chemin des fichiers image
 GANDALF_IMAGE_PATH = "assets/images/gandalf.png"
@@ -749,8 +752,8 @@ def create_gui_elements_login_page(manager):
         ),
         "error_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 + 155),
-                (300, 30)
+                (SCREEN_WIDTH // 2 - 300, SCREEN_HEIGHT // 2 + 155),
+                (600, 30)
             ),
             text="",
             manager=manager,
@@ -851,8 +854,8 @@ def create_gui_elements_new_account_page(manager):
         ),
         "error_label": pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(
-                (SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 + 195),
-                (400, 30)
+                (SCREEN_WIDTH // 2 - 300, SCREEN_HEIGHT // 2 + 195),
+                (600, 30)
             ),
             text="",
             manager=manager,
@@ -1255,6 +1258,7 @@ def handle_move_response(response_json, current_page_elements, response_type, ma
     ):
         current_page_elements["error_label"].set_text("Placement invalide ou pas votre tour.")
         pygame.time.set_timer(pygame.USEREVENT + 1, 3000)
+        play_audio(MOVE_FAILED_PATH)
         return True, current_page_elements, handle_events_on_game_page
 
     if response_type == "move_response":
@@ -1270,7 +1274,7 @@ def handle_move_response(response_json, current_page_elements, response_type, ma
 
 
 def handle_game_over_response(response_json, current_page_element, manager):
-    global score, losses, wins, games_played, is_board_visible, is_grid_visible
+    global score, losses, wins, games_played, is_board_visible, is_grid_visible, board
     response_status = response_json.get("status", None)
 
     if response_status is None:
@@ -1278,10 +1282,17 @@ def handle_game_over_response(response_json, current_page_element, manager):
         next_page_element["error_label"].set_text("Une erreur est survenue, partie finie.")
         return is_running, next_page_element, next_page_handler
 
+    temp_board = response_json.get("board", "")
+    if temp_board != "":
+        board = temp_board
+        print_board(board)
+
     if response_status == VICTORY_STATUS:
         current_page_element["instruction_label"].set_text("Vous avez gagné la partie!")
+        play_audio(VICTORY_SOUND_PATH)
     elif response_status == DEFEAT_STATUS:
         current_page_element["instruction_label"].set_text("Vous avez perdu la partie !")
+        play_audio(DEFEAT_SOUND_PATH)
     elif response_status == WITHDRAW_STATUS:
         current_page_element["instruction_label"].set_text("Vous avez abandoné la partie!")
 
@@ -1381,7 +1392,7 @@ def handle_join_game_response(response_json, current_page_elements, manager, use
 
     clear_page(current_page_elements)
     game_page_elements = create_gui_elements_game_page(manager)
-
+    play_audio(START_GAME_OPPONENT_SOUND_PATH)
     send_json(user_socket, create_ready_to_play_message())
 
     return True, game_page_elements, handle_events_on_game_page
@@ -1518,8 +1529,8 @@ def handle_auth_response(response_json, current_page_elements, manager, user_soc
 
     if response_status is None or not response_status == RESPONSE_SUCCESS_STATUS:
         player_name = ""
-        current_page_elements["error_label"].set_text("Mot de passe incorrect !")
-        # play_audio(YOU_SHALL_NOT_PASS_PATH)
+        current_page_elements["error_label"].set_text("Nom d'utilisateur ou mot de passe incorrect !")
+        play_audio(ERROR_SOUND_PATH)
         return response_status is not None, current_page_elements, handle_events_on_login_page
 
     clear_page(current_page_elements)
@@ -1534,7 +1545,7 @@ def handle_auth_response(response_json, current_page_elements, manager, user_soc
     games_played = player_stats.get("games_played", 0)
     display_player_stats(lobby_page_elements)
 
-    # play_audio(LOBBY_ENTRY)
+    play_audio(LOBBY_ENTRY_SOUND_PATH)
 
     send_json(user_socket, create_get_lobby_json())
 
@@ -1549,7 +1560,7 @@ def handle_login_event(login_page_elements, user_socket):
     if not username or not password:
         print("Nom d'utilisateur ou mot de passe vide !")
         login_page_elements["error_label"].set_text("Nom d'utilisateur ou mot de passe vide !")
-        # play_audio(YOU_SHALL_NOT_PASS_PATH)
+        play_audio(ERROR_SOUND_PATH)
         return
 
     print(f"Tentative de connexion : {username}, {password}")
@@ -1573,17 +1584,17 @@ def handle_create_new_account_event(new_account_page_elements, user_socket):
 
     if not username or not password:
         new_account_page_elements["error_label"].set_text("Nom d'utilisateur ou mot de passe vide !")
-        # play_audio(YOU_SHALL_NOT_PASS_PATH)
+        play_audio(ERROR_SOUND_PATH)
         return
 
     if len(password) < 12:
         new_account_page_elements["error_label"].set_text("Le mot de passe doit contenir au moins 12 caractères.")
-        # play_audio(YOU_SHALL_NOT_PASS_PATH)
+        play_audio(ERROR_SOUND_PATH)
         return
 
     if password != conf_password:
         new_account_page_elements["error_label"].set_text("Les mots de passe ne correspondent pas.")
-        # play_audio(YOU_SHALL_NOT_PASS_PATH)
+        play_audio(ERROR_SOUND_PATH)
         return
 
     print(f"Tentative de création de compte : {username}, {password}")
@@ -1684,7 +1695,9 @@ def handle_events_on_game_page(manager, page_game_elements, user_socket):
                 return True, page_game_elements, handle_events_on_game_page
 
         elif event.type == pygame.USEREVENT + 1:
+            print("erreur ici")
             page_game_elements["error_label"].set_text("")
+            print("erreur pas ici")
 
         elif event.type == pygame.USEREVENT + 2:
             is_grid_visible = False
@@ -1805,7 +1818,7 @@ def clear_page(elements):
 
 
 def main():
-    # play_music(BACKGROUND_MUSIC_PATH, 1, 5000, True)
+    play_music(BACKGROUND_MUSIC_PATH, 1, 5000, True)
 
     screen = init_pygame()
     background = create_background()
