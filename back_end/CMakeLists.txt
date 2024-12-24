@@ -15,9 +15,7 @@ target_link_libraries(back_end PRIVATE cjson)
 find_package(SQLite3 REQUIRED)
 target_link_libraries(back_end PRIVATE SQLite::SQLite3)
 
-# Inclusion d'OpenSSL
-find_package(OpenSSL REQUIRED)
-target_link_libraries(back_end PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(back_end PRIVATE crypt)
 
 # Ajout des répertoires pour inclure cJSON
 target_include_directories(back_end PRIVATE libs/cJSON)

@@ -6,7 +6,8 @@
 #include <sys/select.h>
 #include <fcntl.h>
 #include <sqlite3.h>
-#include <openssl/evp.h>
+#include <time.h>
+#include <crypt.h>
 
 #include "cJSON.h"                             // Bibliothèque pour manipuler des objets JSON
 
@@ -81,7 +82,7 @@ struct player_node {
     int id;
     authenticated_status is_authenticated;
     char username[50];
-    char password[50];
+    char password[64];
     player_stat player_stats;
     char recv_buffer[BUFFER_SIZE];
     char send_buffer[BUFFER_SIZE];
@@ -132,7 +133,7 @@ void add_client_to_list(int client_socket);
 
 int remove_client_from_list(int client_socket);
 
-game_node *add_game_to_list(const cJSON *json, player_node *client);
+game_node *add_game_to_list(player_node *client, const char *game_name);
 
 int remove_game_from_list(const char *game_name);
 
@@ -234,45 +235,95 @@ player_node *select_player(sqlite3 *db, const char *search_colum, const char *se
 
 int connect_to_db(sqlite3 **db);
 
-void hash_password(const char *password, char *hashed_password);
+void generate_salt(char *salt, size_t length);
+
+char *hash_password(const char *password);
+
+int compare_password(const char *input_password, const char *stored_hashed_password);
+
 
 // Fonction principale
 int main() {
+    srand((unsigned int) time(NULL) ^ (unsigned int) getpid());
+    // Initialiser le générateur de nombres aléatoires avec une graine moins prévisible
     connect_to_db(&db); // Se connecter à la base de données SQLite
     const int server_socket = setup_server_socket(); // Configurer le socket serveur
     printf("Serveur en écoute sur le port %d\n", PORT);
 
     run_server_loop(server_socket); // Lancer la boucle principale
     close(server_socket); // Fermer le socket principal*/
+    sqlite3_close(db); // Fermer la connexion à la base de données SQLite
     return 0;
 }
 
-// Fonction pour hacher le mot de passe avec SHA-256
-void hash_password(const char *password, char *hashed_password) {
-    unsigned char hash[EVP_MAX_MD_SIZE];
-    unsigned int length;
+// Fonction pour générer un sel aléatoire
+void generate_salt(char *salt, const size_t length) {
+    const char *charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./";
+    const size_t charset_size = strlen(charset);
 
-    EVP_MD_CTX *context = EVP_MD_CTX_new();
-    if (!context) {
-        fprintf(stderr, "Erreur création contexte SHA-256.\n");
-        return;
+    // Ajoute un préfixe pour choisir l'algorithme (SHA256 ici, représenté par "$5$")
+    strcpy(salt, "$5$");
+    const size_t prefix_length = strlen(salt);
+
+    // Remplit le reste du sel avec des caractères aléatoires
+    for (size_t i = prefix_length; i < length - 1; i++) {
+        salt[i] = charset[random() % charset_size];
     }
 
-    if (EVP_DigestInit_ex(context, EVP_sha3_256(), NULL) != 1 ||
-        EVP_DigestUpdate(context, password, strlen(password)) != 1 ||
-        EVP_DigestFinal_ex(context, hash, &length) != 1) {
-        fprintf(stderr, "Erreur hachage SHA-256.\n");
-        EVP_MD_CTX_free(context);
-        return;
+    salt[length - 1] = '\0'; // Fin de chaîne
+}
+
+// Fonction pour comparer un mot de passe avec un hachage stocké
+int compare_password(const char *input_password, const char *stored_hashed_password) {
+    // Extraire le sel du hachage stocké
+    char salt[64]; // On suppose que le sel ne dépasse pas 64 caractères
+    size_t dollar_count = 0; // Compteur pour le nombre de '$'
+
+    for (size_t i = 0; stored_hashed_password[i] && i < sizeof(salt) - 1; i++) {
+        salt[i] = stored_hashed_password[i];
+        if (stored_hashed_password[i] == '$') {
+            dollar_count++;
+        }
+        if (dollar_count == 3) {
+            salt[i + 1] = '\0'; // Terminer la chaîne après le troisième '$'
+            break;
+        }
     }
 
-    EVP_MD_CTX_free(context);
-
-    // Convertir le hash en une chaîne hexadécimale
-    for (unsigned int i = 0; i < length; ++i) {
-        sprintf(&hashed_password[i * 2], "%02x", hash[i]);
+    if (dollar_count != 3) {
+        fprintf(stderr, "Erreur : le format du hachage est invalide.\n");
+        return 0;
     }
-    hashed_password[length * 2] = '\0'; // Ajouter un terminateur de chaîne
+
+    // Hacher le mot de passe saisi avec le sel extrait
+    char *rehashed_password = crypt(input_password, salt);
+    if (!rehashed_password) {
+        perror("Erreur lors du hachage");
+        return 0;
+    }
+
+    printf("Salt: %s\n", salt);
+    printf("Rehashed password: %s\n", rehashed_password);
+    printf("Stored hashed password: %s\n", stored_hashed_password);
+
+    // Comparer les deux hachages
+    return strcmp(rehashed_password, stored_hashed_password) == 0;
+}
+
+// Fonction pour hacher un mot de passe
+char *hash_password(const char *password) {
+    // Génère un sel aléatoire
+    char salt[20];
+    generate_salt(salt, sizeof(salt));
+
+    // Hache le mot de passe
+    char *hashed_password = crypt(password, salt);
+    if (!hashed_password) {
+        perror("Erreur de hachage");
+        return NULL;
+    }
+
+    return strdup(hashed_password); // Retourne une copie pour éviter les problèmes de mémoire
 }
 
 int connect_to_db(sqlite3 **db) {
@@ -293,12 +344,16 @@ int insert_player(sqlite3 *db, const char *username, const char *password) {
     }
 
     // hash le mot de passes avant de l'envoyer en db
-    char hashed_password[EVP_MAX_MD_SIZE * 2 + 1];
-    hash_password(password, hashed_password);
-    printf("Hashed password: %s\n", hashed_password);
+    char *hashed = hash_password(password);
+    if (!hashed) {
+        fprintf(stderr, "Erreur hachage du mot de passe.\n");
+        return 0;
+    }
+    printf("Hashed password: %s\n", hashed);
 
+    printf("Username: %s\n", username);
     sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, hashed_password, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, hashed, -1, SQLITE_STATIC);
 
     const int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -309,12 +364,15 @@ int insert_player(sqlite3 *db, const char *username, const char *password) {
     return 1;
 }
 
-int update_player(
-    sqlite3 *db,
-    const player_node *player
-) {
+int update_player(sqlite3 *db, const player_node *player) {
     const char *sql =
-            "UPDATE Players SET victories = ?, defeats = ?, forfeits = ?, games_played = ?, score = ? WHERE id = ?;";
+            "UPDATE Players SET "
+            "wins = ?, "
+            "losses = ?, "
+            "forfeits = ?, "
+            "played_games = ?, "
+            "score = ? "
+            "WHERE player_id = ?;";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
         fprintf(stderr, "Erreur préparation: %s\n", sqlite3_errmsg(db));
@@ -357,7 +415,10 @@ int delete_player(sqlite3 *db, const int id) {
 }
 
 player_node *select_player(sqlite3 *db, const char *search_colum, const char *search_value) {
-    const char *sql = strcat(strcat("SELECT * FROM players WHERE ", search_colum), " = ?;");
+    // Allouer un tampon pour la requête SQL
+    char sql[256];
+    snprintf(sql, sizeof(sql), "SELECT * FROM players WHERE %s = ?;", search_colum);
+
     sqlite3_stmt *stmt;
     player_node *player = NULL;
 
@@ -376,6 +437,7 @@ player_node *select_player(sqlite3 *db, const char *search_colum, const char *se
             return NULL;
         }
 
+        // Récupérer les données depuis la ligne
         player->id = sqlite3_column_int(stmt, 0);
         const char *username = (const char *) sqlite3_column_text(stmt, 1);
         const char *password = (const char *) sqlite3_column_text(stmt, 2);
@@ -536,24 +598,17 @@ int remove_client_from_list(const int client_socket) {
     return 0; // Client non trouvé
 }
 
-game_node *add_game_to_list(const cJSON *json, player_node *client) {
+game_node *add_game_to_list(player_node *client, const char *game_name) {
     game_node *new_game_node = malloc(sizeof(game_node));
     if (!new_game_node) {
         perror("Memory allocation error\n");
         return NULL;
     }
 
-    const cJSON *game_name = cJSON_GetObjectItemCaseSensitive(json, "game_name");
-    if (!cJSON_IsString(game_name) || game_name == NULL) {
-        perror("Invalid JSON format\n");
-        free(new_game_node);
-        return NULL;
-    }
-
     new_game_node->player1 = client;
-    new_game_node->id = 1;
-    strncpy(new_game_node->player1->username, client->username, sizeof(new_game_node->player1->username) - 1);
-    strncpy(new_game_node->name, game_name->valuestring, sizeof(new_game_node->name) - 1);
+    new_game_node->player2 = NULL;
+    new_game_node->id = 1; // TODO: retirer car l'id est le nom de la partie
+    strncpy(new_game_node->name, game_name, sizeof(new_game_node->name) - 1);
     new_game_node->status = waiting;
     new_game_node->next = head_linked_list_game;
     head_linked_list_game = new_game_node;
@@ -609,22 +664,20 @@ int remove_game_from_list(const char *game_name) {
 void print_game_list() {
     const game_node *current = head_linked_list_game;
     int i = 0;
-    printf("Game list:\n");
     if (!current) {
         // Si la liste est vide
         printf("No games available.\n");
         return;
     }
+    printf("en-dehors la boucle");
     while (current) {
-        printf(
-            "%d. Game ID=%d, Name=%s, Player1=%s, Player2=%s, Status=%s\n",
-            i++,
-            current->id,
-            current->name,
-            current->player1->username,
-            current->player2 ? current->player2->username : "Unknown",
-            current->status == waiting ? "waiting" : "ongoing"
-        );
+        printf("dans la boucle");
+        printf("%d. ", i++);
+        printf("Game ID=%d, ", current->id);
+        printf("Name=%s, ", current->name);
+        printf("Player1=%s, ", current->player1 ? current->player1->username : "Unknown");
+        printf("Player2=%s, ", current->player2 ? current->player2->username : "Unknown");
+        printf("Status=%s\n", current->status == waiting ? "waiting" : "ongoing");
         current = current->next;
     }
 }
@@ -836,7 +889,7 @@ cJSON *create_game_response_success(const game_node *game) {
     cJSON_AddNumberToObject(response, "status", success);
 
     cJSON *game_obj = cJSON_CreateObject();
-    cJSON_AddNumberToObject(game_obj, "id", 1);
+    cJSON_AddNumberToObject(game_obj, "id", 1); // TODO: retirer car l'id est le nom de la partie
     cJSON_AddStringToObject(game_obj, "name", game->name);
     cJSON_AddNumberToObject(game_obj, "status", game->status);
     cJSON_AddStringToObject(game_obj, "host", game->player1->username);
@@ -1028,41 +1081,29 @@ void complete_client_node(player_node *client, const player_node *client_db, con
     const cJSON *username = cJSON_GetObjectItemCaseSensitive(json, "username");
     const cJSON *password = cJSON_GetObjectItemCaseSensitive(json, "password");
 
-    const cJSON *player_stats = cJSON_GetObjectItemCaseSensitive(json, "player_stats");
-    const cJSON *score = cJSON_CreateNumber(client_db->player_stats.score);
-    const cJSON *wins = cJSON_CreateNumber(client_db->player_stats.wins);
-    const cJSON *losses = cJSON_CreateNumber(client_db->player_stats.losses);
-    const cJSON *forfeits = cJSON_CreateNumber(client_db->player_stats.forfeits);
-    const cJSON *games_played = cJSON_CreateNumber(client_db->player_stats.games_played);
-
+    // Assign username if available in JSON
     if (username && cJSON_IsString(username)) {
         strncpy(client->username, username->valuestring, sizeof(client->username) - 1);
+        client->username[sizeof(client->username) - 1] = '\0'; // Ensure null-termination
     }
 
+    // Assign password if available in JSON
     if (password && cJSON_IsString(password)) {
         strncpy(client->password, password->valuestring, sizeof(client->password) - 1);
+        client->password[sizeof(client->password) - 1] = '\0'; // Ensure null-termination
     }
 
-    if (score && cJSON_IsNumber(score)) {
-        client->player_stats.score = score->valueint;
-    }
+    // Copy the ID from the database structure
+    client->id = client_db->id;
 
-    if (wins && cJSON_IsNumber(wins)) {
-        client->player_stats.wins = wins->valueint;
-    }
+    // Copy stats directly from the database structure
+    client->player_stats.score = client_db->player_stats.score;
+    client->player_stats.wins = client_db->player_stats.wins;
+    client->player_stats.losses = client_db->player_stats.losses;
+    client->player_stats.forfeits = client_db->player_stats.forfeits;
+    client->player_stats.games_played = client_db->player_stats.games_played;
 
-    if (losses && cJSON_IsNumber(losses)) {
-        client->player_stats.losses = losses->valueint;
-    }
-
-    if (forfeits && cJSON_IsNumber(forfeits)) {
-        client->player_stats.forfeits = forfeits->valueint;
-    }
-
-    if (games_played && cJSON_IsNumber(games_played)) {
-        client->player_stats.games_played = games_played->valueint;
-    }
-
+    // Mark the client as authenticated
     client->is_authenticated = 1;
 }
 
@@ -1097,6 +1138,7 @@ void print_board(const char board[BOARD_SIZE]) {
 }
 
 char *handle_auth_response(const cJSON *json, player_node *client) {
+    printf("Authentification du client\n");
     const cJSON *password = cJSON_GetObjectItemCaseSensitive(json, "password");
 
     // Vérifie si le champ "password" existe et est une chaîne valide
@@ -1104,28 +1146,28 @@ char *handle_auth_response(const cJSON *json, player_node *client) {
         return cJSON_Print(create_auth_response_failure());
     }
 
-    const player_node *player_db = select_player(db, "username", client->username);
-    // unsigned char hashed_password[SHA256_DIGSET_LENGTH];
-    // const char *client_password = password->valuestring;
-    // Calcul du hachage SHA256
-    // SHA256((unsigned char *) client_password, strlen(client_password), hashed_password);
-    //printf("Hashed password: %s\n", hashed_password);
+    const cJSON *username = cJSON_GetObjectItemCaseSensitive(json, "username");
+    if (!username || !cJSON_IsString(username)) {
+        return cJSON_Print(create_auth_response_failure());
+    }
 
-    // Si player existe en DB, le mot de passe est incorrect, retourne une réponse d'échec
-    // TODO : Hacher le password recu du client
-    if (
-        !player_db // &&
-        //strcmp(hashed_password, player_db->password) != 0
-    ) {
+    player_node *player_db = select_player(db, "username", username->valuestring);
+    if (!player_db) {
+        return cJSON_Print(create_auth_response_failure());
+    }
+
+    const char *client_password = password->valuestring;
+    if (compare_password(client_password, player_db->password) != 1) {
+        free(player_db);
         return cJSON_Print(create_auth_response_failure());
     }
 
     // Authentification réussie
     complete_client_node(client, player_db, json);
+    free(player_db);
     print_client_list();
     return cJSON_Print(create_auth_response_success(client));
 }
-
 
 char *handle_new_account_response(const cJSON *json, player_node *client) {
     const cJSON *password = cJSON_GetObjectItemCaseSensitive(json, "password");
@@ -1139,13 +1181,13 @@ char *handle_new_account_response(const cJSON *json, player_node *client) {
         return cJSON_Print(create_new_account_response_failure());
     }
 
-    if (!insert_player(db, client->username, client->password)) {
+    const cJSON *username = cJSON_GetObjectItemCaseSensitive(json, "username");
+    if (!insert_player(db, username->valuestring, password->valuestring)) {
         return cJSON_Print(create_new_account_response_failure());
     }
 
     return cJSON_Print(create_new_account_response_success(client));
 }
-
 
 char *handle_get_lobby_response() {
     char *response_string = NULL;
@@ -1167,7 +1209,7 @@ char *handle_create_game_response(const cJSON *json, player_node *client) {
         return cJSON_Print(create_game_response_failure());
     }
 
-    game_node *game = add_game_to_list(json, client);
+    game_node *game = add_game_to_list(client, game_name);
     if (!game) {
         printf("Error creating game\n");
         return cJSON_Print(create_game_response_failure());
@@ -1176,7 +1218,7 @@ char *handle_create_game_response(const cJSON *json, player_node *client) {
     client->current_game = game;
 
     print_game_list();
-
+    printf("testetstes");
     return cJSON_Print(create_game_response_success(game));
 }
 
@@ -1441,6 +1483,8 @@ void handle_win(const game_node *game, player_node *winner, player_node *loser) 
     snprintf(loser->send_buffer, BUFFER_SIZE, "%s", defeat_response);
     free(defeat_response);
 
+    update_player(db, winner);
+    update_player(db, loser);
     // Envoyer les paquets
     send_packet(loser);
 
