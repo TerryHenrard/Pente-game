@@ -93,6 +93,8 @@ NAZGUL_IMAGE_PATH = "assets/images/nazgul.png"
 KING_WITCH_OF_ANGMAR_IMAGE_PATH = "assets/images/king_witch_of_angmar.png"
 YOUNG_BILBO_IMAGE_PATH = "assets/images/young_bilbo.png"
 OLD_BILBO_IMAGE_PATH = "assets/images/old_bilbo.png"
+SOUND_ON_IMAGE_PATH = "assets/images/sound-on.png"
+SOUND_OFF_IMAGE_PATH = "assets/images/sound-off.png"
 
 # Charger les images
 GANDALF_IMAGE = pygame.image.load(GANDALF_IMAGE_PATH)
@@ -103,6 +105,8 @@ KING_WITCH_OF_ANGMAR_IMAGE = pygame.image.load(KING_WITCH_OF_ANGMAR_IMAGE_PATH)
 YOUNG_BILBO_IMAGE = pygame.image.load(YOUNG_BILBO_IMAGE_PATH)
 OLD_BILBO_IMAGE = pygame.image.load(OLD_BILBO_IMAGE_PATH)
 PION_IMAGE_HOST = pygame.image.load(ONE_RING_IMAGE_PATH)
+SOUND_ON_IMAGE = pygame.image.load(SOUND_ON_IMAGE_PATH)
+SOUND_OFF_IMAGE = pygame.image.load(SOUND_OFF_IMAGE_PATH)
 PION_IMAGE_OPPONENT = pygame.image.load(EYE_OF_SAURON_IMAGE_PATH)
 PION_IMAGE_OPPONENT_SCALED = (
     pygame.transform.scale(
@@ -114,6 +118,18 @@ PION_IMAGE_HOST_SCALED = (
     pygame.transform.scale(
         PION_IMAGE_HOST,
         (PIECE_SIZE, PIECE_SIZE)
+    )
+)
+SOUND_ON_IMAGE_SCALED = (
+    pygame.transform.scale(
+        SOUND_ON_IMAGE,
+        (40, 40)
+    )
+)
+SOUND_OFF_IMAGE_SCALED = (
+    pygame.transform.scale(
+        SOUND_OFF_IMAGE,
+        (40, 40)
     )
 )
 
@@ -190,6 +206,26 @@ opponent_name = ""
 is_host = False
 is_my_turn = False
 
+# État initial du son (active par défaut)
+sound_enabled = True
+
+
+def toggle_sound():
+    global sound_enabled
+    sound_enabled = not sound_enabled
+
+    if not sound_enabled and pygame.mixer.music.get_busy():
+        pygame.mixer.stop()
+        pygame.mixer.music.set_volume(0)
+    else:
+        pygame.mixer.music.set_volume(1)
+
+
+# Fonction pour changer l'image du bouton
+def update_sound_button(sound_button):
+    button_text = "Activer le son" if sound_enabled else "Désactiver le son"
+    sound_button.set_text(button_text)
+
 
 def play_music(music_path, volume=1, fade_ms=0, is_loop=False):
     try:
@@ -221,7 +257,7 @@ def unpause_music():
 
 def play_audio(sound_path, volume=0.1):
     try:
-        if not pygame.mixer.get_busy():  # Vérifier si un son est déjà en cours
+        if sound_enabled and not pygame.mixer.get_busy():  # Vérifier si un son est déjà en cours
             sound = pygame.mixer.Sound(sound_path)
             sound.set_volume(volume)
             sound.play()
@@ -574,6 +610,17 @@ def create_gui_elements_lobby_page(manager):
             text="",
             manager=manager,
             object_id="#error_label"
+        ),
+        "sound_button": pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(
+                (
+                    SCREEN_WIDTH - 160,
+                    10
+                ),
+                (150, 40)
+            ),
+            text="",
+            manager=manager
         )
     }
 
@@ -1230,7 +1277,7 @@ def return_to_lobby(current_page_elements, manager):
 
 
 def handle_quit_game_response(response_json, current_page_elements, manager):
-    global is_grid_visible, is_board_visible, board
+    global is_grid_visible, is_board_visible, is_host, board
 
     response_status = response_json.get("status", None)
     if (
@@ -1241,7 +1288,10 @@ def handle_quit_game_response(response_json, current_page_elements, manager):
 
     is_grid_visible = False
     is_board_visible = False
+    is_host = False
     board = ""
+
+    play_audio(FORFEIT_SOUND_PATH)
 
     return return_to_lobby(current_page_elements, manager)
 
@@ -1536,6 +1586,8 @@ def handle_auth_response(response_json, current_page_elements, manager, user_soc
     clear_page(current_page_elements)
     lobby_page_elements = create_gui_elements_lobby_page(manager)
 
+    update_sound_button(lobby_page_elements["sound_button"])
+
     # Afficher les informations du JSON
     player_stats = response_json.get("player_stats", {})
     score = player_stats.get("score", 0)
@@ -1743,6 +1795,10 @@ def handle_events_on_lobby_page(manager, lobby_page_elements, user_socket):
             elif event.ui_element == lobby_page_elements["disconnect_button"]:
                 print("Déconnexion.")
                 send_json(user_socket, create_deconnection_json())
+
+            elif event.ui_element == lobby_page_elements["sound_button"]:
+                update_sound_button(lobby_page_elements["sound_button"])
+                toggle_sound()
 
         manager.process_events(event)
 

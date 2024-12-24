@@ -803,7 +803,7 @@ cJSON *create_auth_response_success(const player_node *client) {
 cJSON *create_auth_response_failure() {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "auth_response");
-    cJSON_AddStringToObject(response, "status", "error");
+    cJSON_AddNumberToObject(response, "status", failure);
     return response;
 }
 
