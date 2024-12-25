@@ -8,6 +8,7 @@
 #include <sqlite3.h>
 #include <time.h>
 #include <crypt.h>
+#include <tgmath.h>
 
 #include "cJSON.h"                             // Bibliothèque pour manipuler des objets JSON
 
@@ -183,11 +184,11 @@ cJSON *board_to_json(const char board[BOARD_SIZE]);
 
 cJSON *create_alert_start_game_failure();
 
-cJSON *create_quit_game_response_succes();
+cJSON *create_quit_game_response_succes(const player_stat *player_stats);
 
 cJSON *create_quit_game_response_failure();
 
-cJSON *create_move_response_success(const game_node *game);
+cJSON *create_move_response_success(const game_node *game, const player_node *player);
 
 cJSON *create_move_response_failure();
 
@@ -240,6 +241,8 @@ void generate_salt(char *salt, size_t length);
 char *hash_password(const char *password);
 
 int compare_password(const char *input_password, const char *stored_hashed_password);
+
+int calculate_delta(int sg, int sp);
 
 
 // Fonction principale
@@ -591,6 +594,7 @@ int remove_client_from_list(const int client_socket) {
                 head_linked_list_client = NULL; // Si la liste est vide, assigner NULL à la tête
             }
 
+            print_client_list();
             return 1; // Client trouvé et supprimé
         }
         current = &entry->next; // Passer au client suivant
@@ -638,26 +642,28 @@ void validate_game_list() {
 
 
 int remove_game_from_list(const char *game_name) {
+    if (!game_name) {
+        fprintf(stderr, "Game name cannot be NULL\n");
+        return 0;
+    }
+
     game_node **current = &head_linked_list_game;
     while (*current) {
         game_node *entry = *current;
         if (strcmp(entry->name, game_name) == 0) {
             printf("Removing game %s\n", game_name);
-            *current = entry->next; // Remove the game from the list
-            free(entry); // Free the memory associated with the game
-
-            // Vérification : Si la liste devient vide, mettre head à NULL
-            if (*current == NULL) {
-                head_linked_list_game = NULL;
-            }
-
+            *current = entry->next; // Supprime le jeu de la liste
+            free(entry); // Libère la mémoire associée au jeu
             printf("Game removed\n");
-            print_game_list();
-            return 1; // Game found and removed
+            // Print list seulement si `print_game_list` est défini
+            if (head_linked_list_game) {
+                print_game_list();
+            }
+            return 1; // Jeu trouvé et supprimé
         }
-        current = &entry->next; // Move to the next game
+        current = &entry->next; // Passe au jeu suivant
     }
-    return 0; // Game not found
+    return 0; // Jeu non trouvé
 }
 
 
@@ -1035,10 +1041,11 @@ cJSON *create_alert_start_game_failure() {
     return response;
 }
 
-cJSON *create_quit_game_response_succes() {
+cJSON *create_quit_game_response_succes(const player_stat *player_stats) {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "quit_game_response");
     cJSON_AddNumberToObject(response, "status", success);
+    cJSON_AddItemToObject(response, "player_stats", create_player_stat_json(player_stats));
 
     return response;
 }
@@ -1051,11 +1058,12 @@ cJSON *create_quit_game_response_failure() {
     return response;
 }
 
-cJSON *create_move_response_success(const game_node *game) {
+cJSON *create_move_response_success(const game_node *game, const player_node *player) {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "move_response");
     cJSON_AddNumberToObject(response, "status", success);
     cJSON_AddItemToObject(response, "board_state", board_to_json(game->board));
+    cJSON_AddNumberToObject(response, "captures", player->captures);
 
     return response;
 }
@@ -1105,6 +1113,7 @@ void complete_client_node(player_node *client, const player_node *client_db, con
 
     // Mark the client as authenticated
     client->is_authenticated = 1;
+    client->captures = 0;
 }
 
 void empty_client(player_node *client) {
@@ -1186,6 +1195,14 @@ char *handle_new_account_response(const cJSON *json, player_node *client) {
         return cJSON_Print(create_new_account_response_failure());
     }
 
+    player_node *player_db = select_player(db, "username", username->valuestring);
+    if (!player_db) {
+        return cJSON_Print(create_new_account_response_failure());
+    }
+
+    complete_client_node(client, player_db, json);
+    free(player_db);
+    print_client_list();
     return cJSON_Print(create_new_account_response_success(client));
 }
 
@@ -1273,13 +1290,16 @@ void forfeit_game(const game_node *game, player_node *forfeiter) {
     // Déterminer le gagnant
     player_node *winner = game->player1 == forfeiter ? game->player2 : game->player1;
 
+    // Calculer le delta de score
+    const int delta = calculate_delta(winner->player_stats.score, forfeiter->player_stats.score);
+
     // Mettre à jour les scores
     winner->player_stats.wins++;
-    winner->player_stats.score += 100;
+    winner->player_stats.score += delta;
     winner->player_stats.games_played++;
     winner->current_game = NULL;
     forfeiter->player_stats.losses++;
-    forfeiter->player_stats.score -= 100;
+    forfeiter->player_stats.score -= delta;
     forfeiter->player_stats.games_played++;
     forfeiter->player_stats.forfeits++;
     forfeiter->current_game = NULL;
@@ -1356,7 +1376,7 @@ char *handle_quit_game_response(player_node *client) {
 
     // Cas ou la partie est en attente "waiting"
     remove_game_from_list(game->name);
-    return cJSON_Print(create_quit_game_response_succes());
+    return cJSON_Print(create_quit_game_response_succes(&client->player_stats));
 }
 
 int count_in_direction(
@@ -1468,15 +1488,23 @@ int check_captures(
     return captures;
 }
 
+// Fonction pour calculer le différentiel de score
+int calculate_delta(const int sg, const int sp) {
+    return round(30.0 / (1.0 + pow(10.0, (sg - sp) / 400.0)));
+}
+
 
 void handle_win(const game_node *game, player_node *winner, player_node *loser) {
+    const int delta = calculate_delta(loser->player_stats.score, winner->player_stats.score);
+    printf("Delta: %d\n", delta);
+
     // Mettre à jour les scores
     winner->player_stats.wins++;
-    winner->player_stats.score += 100;
+    winner->player_stats.score += delta;
     winner->player_stats.games_played++;
 
     loser->player_stats.losses++;
-    loser->player_stats.score -= 100;
+    loser->player_stats.score -= delta;
     loser->player_stats.games_played++;
 
     char *defeat_response = cJSON_Print(create_game_over_defeat_response(loser));
@@ -1597,7 +1625,7 @@ cJSON *handle_play_move_response(const cJSON *json, player_node *client) {
     );
     send_packet(game->current_player);
 
-    return create_move_response_success(game);
+    return create_move_response_success(game, client);
 }
 
 void handle_client_response_type(player_node *client, const char *request_type, const cJSON *json) {
