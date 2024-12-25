@@ -1254,9 +1254,9 @@ def create_gui_join_game_button_element(game_json, manager, index):
 
     button_text = (
             add_padding(f"N°{index + 1}", total_length=7) +
-            add_padding(f"Name: {game_button_name}", total_length=30) +
+            add_padding(f"Name: {game_button_name}", total_length=20) +
             add_padding(f"Status: {'waiting' if game_button_status == 0 else 'ongoing'}") +
-            add_padding(f"Players: {', '.join(game_button_players)}")
+            add_padding(f"Players: {', '.join(game_button_players)}", total_length=30)
     )
 
     return pygame_gui.elements.UIButton(
