@@ -1,7 +1,3 @@
-# TODO: Implémenter des sons aléatoires quand on joue
-# TODO: Implémenter les sons des différentes actions entre les pages
-# TODO: Tchat textuel si le temps
-
 import json
 import re
 import socket
@@ -93,6 +89,8 @@ NAZGUL_IMAGE_PATH = "assets/images/nazgul.png"
 KING_WITCH_OF_ANGMAR_IMAGE_PATH = "assets/images/king_witch_of_angmar.png"
 YOUNG_BILBO_IMAGE_PATH = "assets/images/young_bilbo.png"
 OLD_BILBO_IMAGE_PATH = "assets/images/old_bilbo.png"
+SOUND_ON_IMAGE_PATH = "assets/images/sound-on.png"
+SOUND_OFF_IMAGE_PATH = "assets/images/sound-off.png"
 
 # Charger les images
 GANDALF_IMAGE = pygame.image.load(GANDALF_IMAGE_PATH)
@@ -103,6 +101,8 @@ KING_WITCH_OF_ANGMAR_IMAGE = pygame.image.load(KING_WITCH_OF_ANGMAR_IMAGE_PATH)
 YOUNG_BILBO_IMAGE = pygame.image.load(YOUNG_BILBO_IMAGE_PATH)
 OLD_BILBO_IMAGE = pygame.image.load(OLD_BILBO_IMAGE_PATH)
 PION_IMAGE_HOST = pygame.image.load(ONE_RING_IMAGE_PATH)
+SOUND_ON_IMAGE = pygame.image.load(SOUND_ON_IMAGE_PATH)
+SOUND_OFF_IMAGE = pygame.image.load(SOUND_OFF_IMAGE_PATH)
 PION_IMAGE_OPPONENT = pygame.image.load(EYE_OF_SAURON_IMAGE_PATH)
 PION_IMAGE_OPPONENT_SCALED = (
     pygame.transform.scale(
@@ -114,6 +114,18 @@ PION_IMAGE_HOST_SCALED = (
     pygame.transform.scale(
         PION_IMAGE_HOST,
         (PIECE_SIZE, PIECE_SIZE)
+    )
+)
+SOUND_ON_IMAGE_SCALED = (
+    pygame.transform.scale(
+        SOUND_ON_IMAGE,
+        (40, 40)
+    )
+)
+SOUND_OFF_IMAGE_SCALED = (
+    pygame.transform.scale(
+        SOUND_OFF_IMAGE,
+        (40, 40)
     )
 )
 
@@ -190,6 +202,26 @@ opponent_name = ""
 is_host = False
 is_my_turn = False
 
+# État initial du son (active par défaut)
+sound_enabled = True
+
+
+def toggle_sound():
+    global sound_enabled
+    sound_enabled = not sound_enabled
+
+    if not sound_enabled and pygame.mixer.music.get_busy():
+        pygame.mixer.stop()
+        pygame.mixer.music.set_volume(0)
+    else:
+        pygame.mixer.music.set_volume(1)
+
+
+# Fonction pour changer l'image du bouton
+def update_sound_button(sound_button):
+    button_text = "Désactiver le son" if sound_enabled else "Activer le son"
+    sound_button.set_text(button_text)
+
 
 def play_music(music_path, volume=1, fade_ms=0, is_loop=False):
     try:
@@ -221,7 +253,7 @@ def unpause_music():
 
 def play_audio(sound_path, volume=0.1):
     try:
-        if not pygame.mixer.get_busy():  # Vérifier si un son est déjà en cours
+        if sound_enabled and not pygame.mixer.get_busy():  # Vérifier si un son est déjà en cours
             sound = pygame.mixer.Sound(sound_path)
             sound.set_volume(volume)
             sound.play()
@@ -302,7 +334,7 @@ def send_json(user_socket, json_message):
 
 def receive_json(s):
     try:
-        data = s.recv(BUFFER_SIZE).decode()
+        data = s.recv(BUFFER_SIZE).decode("utf-8")
         if not data:
             return None
         return json.loads(data)
@@ -400,22 +432,22 @@ def create_get_lobby_json():
         return None
 
 
-def create_join_game_json(game_name):
+def create_join_game_json(game_name_param):
     try:
         return json.dumps({
             "type": "join_game",
-            "game_name": game_name
+            "game_name": game_name_param
         })
     except Exception as e:
         print(f"Erreur lors de l'envoi du message : {e}")
         return None
 
 
-def create_new_game_json(game_name):
+def create_new_game_json(game_name_param):
     try:
         return json.dumps({
             "type": "create_game",
-            "game_name": game_name
+            "game_name": game_name_param
         })
     except Exception as e:
         print(f"Erreur lors de l'envoi du message : {e}")
@@ -574,6 +606,17 @@ def create_gui_elements_lobby_page(manager):
             text="",
             manager=manager,
             object_id="#error_label"
+        ),
+        "sound_button": pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(
+                (
+                    SCREEN_WIDTH - 160,
+                    10
+                ),
+                (150, 40)
+            ),
+            text="Désactiver le son",
+            manager=manager
         )
     }
 
@@ -1051,7 +1094,16 @@ def create_gui_elements_game_page(manager):
             text="",
             manager=manager,
             object_id="#instruction_label_on_game_page"
-        )
+        ),
+        "captures_label": pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(
+                (10, SCREEN_HEIGHT // 2 + 30),
+                (LABEL_WIDTH, 30)
+            ),
+            text="Captures: 0",
+            manager=manager,
+            object_id="#captures_label_on_game_page"
+        ),
     }
 
 
@@ -1147,8 +1199,7 @@ def handle_server_response(manager, user_socket, current_page_elements, current_
             return handle_move_response(
                 response_json,
                 current_page_elements,
-                response_type,
-                manager
+                response_type
             )
         elif response_type == "game_over":
             return handle_game_over_response(
@@ -1193,19 +1244,19 @@ def add_padding(text, total_length=20, align="left", padding_char=" "):
 
 
 def create_gui_join_game_button_element(game_json, manager, index):
-    game_id = game_json.get("id", None)
-    game_name = game_json.get("name", None)
-    game_players = game_json.get("players", None)
-    game_status = game_json.get("status", None)  # waiting 0 / ongoing 1
+    game_button_id = game_json.get("id", None)
+    game_button_name = game_json.get("name", None)
+    game_button_players = game_json.get("players", None)
+    game_button_status = game_json.get("status", None)  # waiting 0 / ongoing 1
 
-    if None in [game_id, game_name, game_players, game_status]:
+    if None in [game_button_id, game_button_name, game_button_players, game_button_status]:
         return None
 
     button_text = (
             add_padding(f"N°{index + 1}", total_length=7) +
-            add_padding(f"Name: {game_name}", total_length=30) +
-            add_padding(f"Status: {'waiting' if game_status == 0 else 'ongoing'}") +
-            add_padding(f"Players: {', '.join(game_players)}")
+            add_padding(f"Name: {game_button_name}", total_length=30) +
+            add_padding(f"Status: {'waiting' if game_button_status == 0 else 'ongoing'}") +
+            add_padding(f"Players: {', '.join(game_button_players)}")
     )
 
     return pygame_gui.elements.UIButton(
@@ -1218,7 +1269,7 @@ def create_gui_join_game_button_element(game_json, manager, index):
         ),
         text=button_text,
         manager=manager,
-        object_id=f"#button_game_{game_id}"
+        object_id=f"#button_game_{game_button_id}"
     )
 
 
@@ -1230,7 +1281,7 @@ def return_to_lobby(current_page_elements, manager):
 
 
 def handle_quit_game_response(response_json, current_page_elements, manager):
-    global is_grid_visible, is_board_visible, board
+    global is_grid_visible, is_board_visible, is_host, board
 
     response_status = response_json.get("status", None)
     if (
@@ -1241,12 +1292,16 @@ def handle_quit_game_response(response_json, current_page_elements, manager):
 
     is_grid_visible = False
     is_board_visible = False
+    is_host = False
     board = ""
+
+    play_audio(FORFEIT_SOUND_PATH)
+    update_player_stats(response_json.get("player_stats", {}))
 
     return return_to_lobby(current_page_elements, manager)
 
 
-def handle_move_response(response_json, current_page_elements, response_type, manager):
+def handle_move_response(response_json, current_page_elements, response_type):
     global board, is_my_turn
 
     response_status = response_json.get("status", None)
@@ -1257,9 +1312,19 @@ def handle_move_response(response_json, current_page_elements, response_type, ma
             not response_status == RESPONSE_SUCCESS_STATUS
     ):
         current_page_elements["error_label"].set_text("Placement invalide ou pas votre tour.")
-        pygame.time.set_timer(pygame.USEREVENT + 1, 3000)
         play_audio(MOVE_FAILED_PATH)
         return True, current_page_elements, handle_events_on_game_page
+
+    current_page_elements["error_label"].set_text("")
+
+    # Compare the number of captures to determine if a capture has been made
+    print("Comparing captures")
+    print(current_page_elements["captures_label"])
+    previous_captures = int(current_page_elements["captures_label"].text.split(":")[1].strip())
+    new_captures = response_json.get("captures", 0)
+    if new_captures > previous_captures:
+        play_audio(CAPTURE_SOUND_PATH)
+        current_page_elements["captures_label"].set_text(f"Captures: {new_captures}")
 
     if response_type == "move_response":
         current_page_elements["instruction_label"].set_text(f"Attendez que {opponent_name} joue.")
@@ -1273,12 +1338,22 @@ def handle_move_response(response_json, current_page_elements, response_type, ma
     return True, current_page_elements, handle_events_on_game_page
 
 
-def handle_game_over_response(response_json, current_page_element, manager):
-    global score, losses, wins, games_played, is_board_visible, is_grid_visible, board
+def update_player_stats(player_stats):
+    global score, wins, losses, games_played, forfeits
+
+    score = player_stats.get("score", 0)
+    wins = player_stats.get("wins", 0)
+    losses = player_stats.get("losses", 0)
+    games_played = player_stats.get("games_played", 0)
+    forfeits = player_stats.get("forfeits", 0)
+
+
+def handle_game_over_response(response_json, current_page_elements, manager):
+    global is_board_visible, is_grid_visible, board, is_host
     response_status = response_json.get("status", None)
 
     if response_status is None:
-        is_running, next_page_element, next_page_handler = return_to_lobby(current_page_element, manager)
+        is_running, next_page_element, next_page_handler = return_to_lobby(current_page_elements, manager)
         next_page_element["error_label"].set_text("Une erreur est survenue, partie finie.")
         return is_running, next_page_element, next_page_handler
 
@@ -1288,29 +1363,28 @@ def handle_game_over_response(response_json, current_page_element, manager):
         print_board(board)
 
     if response_status == VICTORY_STATUS:
-        current_page_element["instruction_label"].set_text("Vous avez gagné la partie!")
+        current_page_elements["instruction_label"].set_text("Vous avez gagné la partie!")
         play_audio(VICTORY_SOUND_PATH)
     elif response_status == DEFEAT_STATUS:
-        current_page_element["instruction_label"].set_text("Vous avez perdu la partie !")
+        current_page_elements["instruction_label"].set_text("Vous avez perdu la partie !")
         play_audio(DEFEAT_SOUND_PATH)
     elif response_status == WITHDRAW_STATUS:
-        current_page_element["instruction_label"].set_text("Vous avez abandoné la partie!")
+        current_page_elements["instruction_label"].set_text("Vous avez abandoné la partie!")
 
     player_stat = response_json.get("player_stats", None)
     if player_stat is None:
         is_board_visible = False
         is_grid_visible = False
-        display_player_stats(current_page_element)
-        return return_to_lobby(current_page_element, manager)
+        display_player_stats(current_page_elements)
+        return return_to_lobby(current_page_elements, manager)
 
-    score = player_stat.get("score", 0)
-    wins = player_stat.get("wins", 0)
-    losses = player_stat.get("losses", 0)
-    games_played = player_stat.get("games_played", 0)
+    update_player_stats(player_stat)
 
-    pygame.time.set_timer(pygame.USEREVENT + 2, 3000)
-
-    return True, current_page_element, handle_events_on_game_page
+    print("Fin de la partie")
+    is_grid_visible = False
+    is_board_visible = False
+    is_host = False
+    return return_to_lobby(current_page_elements, manager)
 
 
 def handle_alert_start_game(response_json, current_page_elements, manager):
@@ -1362,6 +1436,7 @@ def handle_alert_start_game(response_json, current_page_elements, manager):
         current_page_elements["oppenent_pion_logo"] = opponent_pion_logo
         current_page_elements["instruction_label"].set_text(f"À vous de jouer, {player_name} !")
         is_my_turn = not is_my_turn
+        play_audio(START_GAME_OPPONENT_SOUND_PATH)
     else:
         opponent_pion_logo = draw_pion(
             OPPONENT_PION_LOGO_X,
@@ -1373,6 +1448,7 @@ def handle_alert_start_game(response_json, current_page_elements, manager):
         )
         current_page_elements["oppenent_pion_logo"] = opponent_pion_logo
         current_page_elements["instruction_label"].set_text(f"Attendez que {opponent_name} joue.")
+        play_audio(START_GAME_HOST_SOUND_PATH)
 
     display_player_stats(current_page_elements)
     display_opponent_stats(current_page_elements, opponent_info)
@@ -1392,7 +1468,6 @@ def handle_join_game_response(response_json, current_page_elements, manager, use
 
     clear_page(current_page_elements)
     game_page_elements = create_gui_elements_game_page(manager)
-    play_audio(START_GAME_OPPONENT_SOUND_PATH)
     send_json(user_socket, create_ready_to_play_message())
 
     return True, game_page_elements, handle_events_on_game_page
@@ -1536,6 +1611,8 @@ def handle_auth_response(response_json, current_page_elements, manager, user_soc
     clear_page(current_page_elements)
     lobby_page_elements = create_gui_elements_lobby_page(manager)
 
+    update_sound_button(lobby_page_elements["sound_button"])
+
     # Afficher les informations du JSON
     player_stats = response_json.get("player_stats", {})
     score = player_stats.get("score", 0)
@@ -1610,18 +1687,18 @@ def handle_create_new_account_event(new_account_page_elements, user_socket):
 
 
 def handle_create_new_game_event(new_game_page_elements, user_socket):
-    game_name = new_game_page_elements["game_name_entry"].get_text()
+    local_game_name = new_game_page_elements["game_name_entry"].get_text()
 
-    if not game_name:
+    if not local_game_name:
         new_game_page_elements["error_label"].set_text("Veuillez donner un nom à la partie")
         return
 
-    if len(game_name) >= 20:
+    if len(local_game_name) >= 20:
         new_game_page_elements["error_label"].set_text("Maximum 20 caractères")
         return
 
-    print(f"Tentative de création de la partie : {game_name}")
-    json_new_game_message = create_new_game_json(game_name)
+    print(f"Tentative de création de la partie : {local_game_name}")
+    json_new_game_message = create_new_game_json(local_game_name)
     if not json_new_game_message:
         print("Erreur lors de la création de la partie")
         return
@@ -1692,22 +1769,6 @@ def handle_events_on_game_page(manager, page_game_elements, user_socket):
             else:
                 print("Clic en dehors de la grille.")
                 page_game_elements["error_label"].set_text("Clic en dehors de la grille.")
-                return True, page_game_elements, handle_events_on_game_page
-
-        elif event.type == pygame.USEREVENT + 1:
-            print("erreur ici")
-            page_game_elements["error_label"].set_text("")
-            print("erreur pas ici")
-
-        elif event.type == pygame.USEREVENT + 2:
-            is_grid_visible = False
-            is_board_visible = False
-            is_host = False
-            is_running, next_page_elements, new_events_handler = (
-                return_to_lobby(page_game_elements, manager))
-            display_player_stats(next_page_elements)
-
-            return is_running, next_page_elements, new_events_handler
 
         manager.process_events(event)
 
@@ -1743,6 +1804,10 @@ def handle_events_on_lobby_page(manager, lobby_page_elements, user_socket):
             elif event.ui_element == lobby_page_elements["disconnect_button"]:
                 print("Déconnexion.")
                 send_json(user_socket, create_deconnection_json())
+
+            elif event.ui_element == lobby_page_elements["sound_button"]:
+                toggle_sound()
+                update_sound_button(lobby_page_elements["sound_button"])
 
         manager.process_events(event)
 

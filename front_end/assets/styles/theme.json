@@ -226,5 +226,13 @@
       "size": 22,
       "bold": true
     }
+  },
+  "#captures_label_on_game_page": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
   }
 }
