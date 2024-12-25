@@ -1,0 +1,238 @@
+{
+  "defaults": {
+    "font": {
+      "size": 16,
+      "bold": false,
+      "italic": false
+    },
+    "colours": {
+      "normal_bg": "#FFFFFF",
+      "hovered_bg": "#F5F5F5",
+      "disabled_bg": "#DDDDDD",
+      "normal_text": "#000000",
+      "hovered_text": "#000000",
+      "disabled_text": "#AAAAAA"
+    },
+    "border_width": 1,
+    "border_colour": "#AAAAAA",
+    "focus_border_colour": "#1E90FF"
+  },
+  "#login_title_label": {
+    "font": {
+      "size": 32,
+      "bold": true
+    }
+  },
+  "#new_account_title_label": {
+    "font": {
+      "size": 32,
+      "bold": true
+    }
+  },
+  "#lobby_title_label": {
+    "font": {
+      "size": 32,
+      "bold": true
+    }
+  },
+  "#new_game_title_label": {
+    "font": {
+      "size": 32,
+      "bold": true
+    }
+  },
+  "#new_join_game_title_label": {
+    "font": {
+      "size": 32,
+      "bold": true
+    }
+  },
+  "#error_label": {
+    "font": {
+      "size": 18
+    },
+    "colours": {
+      "normal_text": "#FF0000"
+    },
+    "misc": {
+      "text_horiz_alignment": "center"
+    }
+  },
+  "#error_label_on_game_page": {
+    "font": {
+      "size": 20
+    },
+    "colours": {
+      "normal_text": "#FF0000"
+    },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
+  "#instruction_label_on_game_page": {
+    "font": {
+      "size": 20
+    },
+    "colours": {
+      "normal_text": "#000000"
+    },
+    "misc": {
+      "text_horiz_alignment": "right"
+    }
+  },
+  "button": {
+    "normal_text": "#FFFFFF",
+    "hovered_text": "#FFFFE0",
+    "normal_bg": "#1E90FF",
+    "hovered_bg": "#00BFFF",
+    "border_width": 2
+  },
+  "#username_login_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  },
+  "#password_login_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  },
+  "#username_create_account_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  },
+  "#password_create_account_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  },
+  "#conf_password_create_account_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  },
+  "#game_name_entry": {
+    "colours": {
+      "normal_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF"
+    }
+  },
+  "#score_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
+  "#wins_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
+  "#losses_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
+  "#forfeits_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
+  "#games_played_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
+  "#opponent_score_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "right"
+    }
+  },
+  "#opponent_wins_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "right"
+    }
+  },
+  "#opponent_losses_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "right"
+    }
+  },
+  "#opponent_games_played_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "right"
+    }
+  },
+  "#button_game_0": {
+    "normal_text": "#FFFFFF",
+    "hovered_text": "#FFFFE0",
+    "normal_bg": "#1E90FF",
+    "hovered_bg": "#00BFFF",
+    "border_width": 2,
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
+  "#button_game_1": {
+    "normal_text": "#FFFFFF",
+    "hovered_text": "#FFFFE0",
+    "normal_bg": "#1E90FF",
+    "hovered_bg": "#00BFFF",
+    "border_width": 2,
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  },
+  "#player1_label": {
+    "font": {
+      "size": 22,
+      "bold": true
+    }
+  },
+  "#player2_label": {
+    "font": {
+      "size": 22,
+      "bold": true
+    }
+  },
+  "#captures_label_on_game_page": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
+  }
+}
