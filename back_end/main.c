@@ -245,7 +245,7 @@ int compare_password(const char *input_password, const char *stored_hashed_passw
 int calculate_delta(int sg, int sp);
 
 
-// Fonction principale
+// Fonction principalz
 int main() {
     srand((unsigned int) time(NULL) ^ (unsigned int) getpid());
     // Initialiser le générateur de nombres aléatoires avec une graine moins prévisible

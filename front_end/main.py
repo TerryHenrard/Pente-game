@@ -5,6 +5,7 @@ import socket
 import pygame
 import pygame_gui
 import select
+from pygame_gui.elements import UIButton
 
 # Configuration du serveur
 HOST = '127.0.0.1'  # Adresse IP du serveur (localhost)
@@ -28,6 +29,16 @@ GRID_COLS = 19
 GRID_SIZE = GRID_ROWS * GRID_COLS
 CELL_SIZE = 45
 PIECE_SIZE = 40
+LINE_WIDTH_DEFAULT = 1
+LINE_WIDTH_CENTER = 2
+
+# Points "hoshi" (points spéciaux sur le plateau)
+HOSHI_POINTS = [
+    (3, 3), (3, 9), (3, 15),
+    (9, 3), (9, 9), (9, 15),
+    (15, 3), (15, 9), (15, 15)
+]
+HOSHI_POINTS_SIZE = 8
 
 # Caractères des pions
 HOST_CHAR = 'x'
@@ -134,26 +145,32 @@ GANDALF_IMAGE_X = 10
 GANDALF_IMAGE_Y = 200
 GANDALF_IMAGE_WIDTH = 600
 GANDALF_IMAGE_HEIGHT = 900
+
 SAURON_IMAGE_X = 640
 SAURON_IMAGE_Y = 200
 SAURON_IMAGE_WIDTH = 592
 SAURON_IMAGE_HEIGHT = 900
+
 GOLLUM_IMAGE_WIDTH = 415
 GOLLUM_IMAGE_HEIGHT = 640
 GOLLUM_IMAGE_X = -35
 GOLLUM_IMAGE_Y = SCREEN_HEIGHT - GOLLUM_IMAGE_HEIGHT
+
 NAZGUL_IMAGE_WIDTH = 311
 NAZGUL_IMAGE_HEIGHT = 761
 NAZGUL_IMAGE_X = SCREEN_WIDTH // 2 - 470
 NAZGUL_IMAGE_Y = 350
+
 KING_WITCH_OF_ANGMAR_IMAGE_WIDTH = 400
 KING_WITCH_OF_ANGMAR_IMAGE_HEIGHT = 812
 KING_WITCH_OF_ANGMAR_IMAGE_X = SCREEN_WIDTH // 2 + 130
 KING_WITCH_OF_ANGMAR_IMAGE_Y = 300
+
 YOUNG_BILBO_IMAGE_WIDTH = 246
 YOUNG_BILBO_IMAGE_HEIGHT = 640
 YOUNG_BILBO_IMAGE_X = 0
 YOUNG_BILBO_IMAGE_Y = 430
+
 OLD_BILBO_IMAGE_WIDTH = 237
 OLD_BILBO_IMAGE_HEIGHT = 640
 OLD_BILBO_IMAGE_X = SCREEN_WIDTH - OLD_BILBO_IMAGE_WIDTH
@@ -206,153 +223,393 @@ is_my_turn = False
 sound_enabled = True
 
 
-def toggle_sound():
-    global sound_enabled
-    sound_enabled = not sound_enabled
+def toggle_sound(sound_enabled_param: bool) -> bool:
+    """
+    Active ou désactive le son.
 
-    if not sound_enabled and pygame.mixer.music.get_busy():
-        pygame.mixer.stop()
-        pygame.mixer.music.set_volume(0)
-    else:
-        pygame.mixer.music.set_volume(1)
+    Params:
+        sound_enabled_param (bool) : L'état actuel du son (True pour activé, False pour désactivé).
 
+    Returns:
+        bool: Le nouvel état du son (True pour activé, False pour désactivé).
 
-# Fonction pour changer l'image du bouton
-def update_sound_button(sound_button):
-    button_text = "Désactiver le son" if sound_enabled else "Activer le son"
-    sound_button.set_text(button_text)
-
-
-def play_music(music_path, volume=1, fade_ms=0, is_loop=False):
+    Raises:
+        RuntimeError: Si le mixeur de pygame n'est pas initialisé.
+    """
     try:
+        # Inverse l'état actuel du son
+        sound_enabled_param = not sound_enabled_param
+
+        # Vérifie si le mixeur de pygame est initialisé
+        if not pygame.mixer.get_init():
+            raise RuntimeError(
+                "pygame.mixer n'est pas initialisé. Assurez-vous que pygame.mixer.init() est appelé avant de basculer le son."
+            )
+
+        # Ajuste le volume en fonction du nouvel état
+        pygame.mixer.music.set_volume(1 if sound_enabled_param else 0)
+
+        # Retourne le nouvel état du son
+        return sound_enabled_param
+    except Exception as e:
+        # Relève toute exception rencontrée
+        raise Exception(f"Erreur lors de la bascule du son : {e}") from e
+
+
+def update_sound_button(
+        sound_button: UIButton,
+        sound_enabled_param: bool
+) -> None:
+    """
+    Met à jour le texte du bouton en fonction de l'état du son.
+
+    Params:
+        sound_button (UIButton): Objet du bouton à modifier (doit implémenter la méthode `set_text`).
+        sound_enabled_param (bool): État actuel du son (True pour activé, False pour désactivé).
+
+    Returns:
+        None
+
+    Raises:
+        ValueError: Si le bouton fourni est invalide ou ne contient pas la méthode `set_text`.
+        Exception: Pour toute erreur inattendue lors de la mise à jour du texte.
+    """
+    try:
+        # Vérifie que le bouton est valide
+        if not sound_button or not hasattr(sound_button, "set_text"):
+            raise ValueError("Le bouton fourni est invalide ou ne possède pas de méthode `set_text`.")
+
+        # Détermine le texte du bouton en fonction de l'état du son
+        text: str = "Désactiver le son" if sound_enabled_param else "Activer le son"
+
+        # Met à jour le texte du bouton
+        sound_button.set_text(text)
+
+    except ValueError as ve:
+        raise ValueError(f"Erreur de validation des paramètres : {ve}") from ve
+    except AttributeError as ae:
+        raise AttributeError(f"Erreur d'attribut sur le bouton fourni : {ae}") from ae
+    except Exception as ex:
+        raise Exception(f"Erreur inattendue lors de la mise à jour du bouton : {ex}") from ex
+
+
+def play_music(
+        music_path: str,
+        volume: float = 1.0,
+        fade_ms: int = 0,
+        is_loop: bool = False
+) -> None:
+    """
+    Jouer un fichier musical.
+
+    Params:
+        music_path (str): Chemin du fichier audio.
+        volume (float): Niveau du volume (valeurs entre 0.0 et 1.0). Par défaut, 1.0.
+        fade_ms (int): Durée de transition (en millisecondes) pour l'apparition progressive de la musique. Par défaut, 0.
+        is_loop (bool): Si vrai, boucle la musique indéfiniment. Par défaut, False.
+
+    Returns:
+        None
+
+    Raises:
+        ValueError: Si le volume est hors de l'intervalle [0.0, 1.0].
+        FileNotFoundError: Si le fichier audio spécifié n'existe pas.
+        pygame.error: Si une erreur Pygame survient.
+        Exception: Pour toute autre erreur inattendue.
+    """
+    try:
+        # Vérifie si le fichier existe
+        if not music_path or not isinstance(music_path, str):
+            raise ValueError("Le chemin de la musique doit être une chaîne non vide.")
+
+        # Charge le fichier audio
         pygame.mixer.music.load(music_path)
-        pygame.mixer.music.set_volume(volume)
-        pygame.mixer.music.play(loops=1 if is_loop else 0, fade_ms=fade_ms)
-    except pygame.error as e:
-        print(f"Erreur lors de la lecture de la musique : {e}")
+
+        # Configure le volume
+        if 0.0 <= volume <= 1.0:
+            pygame.mixer.music.set_volume(volume)
+        else:
+            raise ValueError("Le volume doit être compris entre 0.0 et 1.0")
+
+        # Lance la lecture avec ou sans boucle
+        pygame.mixer.music.play(loops=-1 if is_loop else 0, fade_ms=fade_ms)
+
+    except pygame.error as pe:
+        raise pygame.error(f"Erreur Pygame lors de la lecture de la musique : {pe}") from pe
+    except ValueError as ve:
+        raise ValueError(f"Erreur de validation des paramètres : {ve}") from ve
+    except Exception as ex:
+        raise Exception(f"Erreur inattendue : {ex}") from ex
 
 
-def stop_music(fade_ms=2000):
+def pause_music() -> None:
+    """
+    Mets en pause la musique en cours de lecture.
+
+    Exceptions:
+        pygame.error: Si une erreur se produit lors de la tentative de mise en pause de la musique.
+        Exception: Pour toute autre erreur inattendue.
+    """
     try:
-        pygame.mixer.music.fadeout(fade_ms)
-    except pygame.error as e:
-        print(f"Erreur lors de l'arrêt de l'audio : {e}")
+        # Met la musique en pause
+        pygame.mixer.music.pause()
+
+    except pygame.error as pe:
+        raise pygame.error(f"Erreur Pygame lors de la mise en pause de la musique : {pe}") from pe
+    except Exception as ex:
+        raise Exception(f"Erreur inattendue lors de la mise en pause de la musique : {ex}") from ex
 
 
-def pause_music():
-    pygame.mixer.music.pause()
+def unpause_music() -> None:
+    """
+    Reprends la musique en cours de pause.
 
-
-def unpause_music():
+    Exceptions:
+        pygame.error: Si une erreur se produit lors de la reprise de la musique.
+        Exception: Pour toute autre erreur imprévue.
+    """
     try:
-        print("Reprise de la musique.")
+        # Reprend la musique en pause
         pygame.mixer.music.unpause()
-    except pygame.error as e:
-        print(f"Erreur lors de la reprise de l'audio : {e}")
+
+    except pygame.error as pe:
+        raise pygame.error(f"Erreur Pygame lors de la reprise de la musique : {pe}") from pe
+    except Exception as ex:
+        raise Exception(f"Erreur inattendue lors de la reprise de la musique : {ex}") from ex
 
 
-def play_audio(sound_path, volume=0.1):
+def play_audio(
+        sound_path: str,
+        volume: float = 0.1
+) -> None:
+    """
+    Joue un fichier audio.
+
+    Params:
+        sound_path (str): Chemin vers le fichier audio à jouer.
+        volume (float): Niveau du volume (valeurs entre 0.0 et 1.0). Par défaut, 0.1.
+
+    Returns:
+        None
+
+    Exceptions:
+        pygame.error: Si une erreur se produit lors de la lecture audio.
+        ValueError: Si le volume est hors des limites acceptables.
+        Exception: Pour toute autre erreur inattendue.
+    """
     try:
-        if sound_enabled and not pygame.mixer.get_busy():  # Vérifier si un son est déjà en cours
+        # Vérifie si le volume est dans les limites acceptables
+        if not 0.0 <= volume <= 1.0:
+            raise ValueError("Le volume doit être compris entre 0.0 et 1.0.")
+
+        # Vérifie si le son est activé et qu'aucun autre son n'est en cours de lecture
+        if sound_enabled and not pygame.mixer.get_busy():
+            # Charge et joue le son
             sound = pygame.mixer.Sound(sound_path)
             sound.set_volume(volume)
             sound.play()
-    except pygame.error as e:
-        print(f"Erreur lors de la lecture de l'audio : {e}")
+        else:
+            print("Lecture audio ignorée : le son est désactivé ou un autre son est en cours.")
+
+    except pygame.error as pe:
+        raise pygame.error(f"Erreur Pygame lors de la lecture de l'audio : {pe}") from pe
+    except ValueError as ve:
+        raise ValueError(f"Erreur de validation des paramètres : {ve}") from ve
+    except Exception as ex:
+        raise Exception(f"Erreur inattendue lors de la lecture de l'audio : {ex}") from ex
 
 
-def draw_board():
-    for y in range(GRID_ROWS):
+def draw_board() -> None:
+    """
+    Dessine le plateau de jeu en affichant les pièces à leurs positions respectives.
+
+    Exceptions:
+        NameError: Si des constantes ou variables utilisées ne sont pas définies.
+        TypeError: Si le tableau `board` ou ses éléments sont mal définis.
+    """
+    try:
+        # Parcourt chaque rangée de la grille
+        for y in range(GRID_ROWS):
+            # Parcourt chaque colonne de la grille
+            for x in range(GRID_COLS):
+                # Récupère l'état de la case actuelle
+                cell = board[y * GRID_COLS + x]
+
+                # Calcul de la position en pixels de l'image
+                img_x = (MARGIN_X + (x * CELL_SIZE) - (PIECE_SIZE // 2))
+                img_y = (MARGIN_Y + (y * CELL_SIZE) - (PIECE_SIZE // 2))
+
+                # Détermine l'image à utiliser en fonction du caractère dans la case
+                pion_image = {
+                    HOST_CHAR: PION_IMAGE_HOST_SCALED,
+                    OPPONENT_CHAR: PION_IMAGE_OPPONENT_SCALED
+                }.get(cell)
+
+                # Dessine l'image si elle est définie
+                if pion_image:
+                    SCREEN.blit(pion_image, (img_x, img_y))
+
+    except NameError as ne:
+        raise NameError(f"Erreur : une constante ou une variable n'est pas définie correctement : {ne}") from ne
+    except TypeError as te:
+        raise TypeError(f"Erreur : le tableau `board` ou ses éléments sont mal définis : {te}") from te
+    except Exception as ex:
+        raise Exception(f"Erreur inattendue lors du dessin du plateau : {ex}") from ex
+
+
+def draw_grid(surface: pygame.Surface) -> None:
+    """
+    Dessine la grille du plateau et les points "hoshi" sur la surface donnée.
+
+    Args:
+        surface (pygame.Surface): Surface sur laquelle la grille et les points doivent être dessinés.
+
+    Exceptions:
+        ValueError: Si la surface n'est pas valide.
+        Exception: Pour toute erreur inattendue.
+    """
+    try:
+        # Vérifie que la surface est valide
+        if not isinstance(surface, pygame.Surface):
+            raise ValueError("La surface fournie n'est pas valide.")
+
+        # Dessiner les lignes verticales
         for x in range(GRID_COLS):
-            cell = board[y * GRID_COLS + x]
-            # Calcul de la position en pixels de l'image
-            img_x = (MARGIN_X + (x * CELL_SIZE) - (PIECE_SIZE // 2))
-            img_y = (MARGIN_Y + (y * CELL_SIZE) - (PIECE_SIZE // 2))
-
-            pion_image = None
-            if cell == HOST_CHAR:
-                pion_image = PION_IMAGE_HOST_SCALED
-            elif cell == OPPONENT_CHAR:
-                pion_image = PION_IMAGE_OPPONENT_SCALED
-
-            if pion_image is not None:
-                SCREEN.blit(pion_image, (img_x, img_y))
-
-
-# Fonction pour dessiner la grille et les points "hoshi"
-def draw_grid(surface):
-    # Dessiner les lignes verticales
-    for x in range(GRID_COLS):
-        width = 2 if x == 9 else 1
-        pygame.draw.line(
-            surface,
-            LINE_COLOR,
-            (MARGIN_X + x * CELL_SIZE, MARGIN_Y),
-            (MARGIN_X + x * CELL_SIZE, MARGIN_Y + GRID_DIMENSIONS),
-            width
-        )
-
-    # Dessiner les lignes horizontales
-    for y in range(GRID_ROWS):
-        width = 2 if y == 9 else 1
-        pygame.draw.line(
-            surface,
-            LINE_COLOR,
-            (MARGIN_X, MARGIN_Y + y * CELL_SIZE),
-            (MARGIN_X + GRID_DIMENSIONS, MARGIN_Y + y * CELL_SIZE),
-            width
-        )
-
-    # Ajouter les points "hoshi"
-    hoshi_points = [
-        (3, 3), (3, 9), (3, 15),
-        (9, 3), (9, 9), (9, 15),
-        (15, 3), (15, 9), (15, 15)
-    ]
-    for px, py in hoshi_points:
-        square_size = 8  # Taille du carré
-        pygame.draw.rect(
-            surface,
-            LINE_COLOR,
-            pygame.Rect(
-                MARGIN_X + px * CELL_SIZE - square_size // 2 + 1,
-                MARGIN_Y + py * CELL_SIZE - square_size // 2 + 0.5,
-                square_size,
-                square_size
+            pygame.draw.line(
+                surface,
+                LINE_COLOR,
+                (MARGIN_X + x * CELL_SIZE, MARGIN_Y),
+                (MARGIN_X + x * CELL_SIZE, MARGIN_Y + GRID_DIMENSIONS),
+                LINE_WIDTH_CENTER if x == GRID_COLS // 2 else LINE_WIDTH_DEFAULT
             )
-        )
+
+        # Dessiner les lignes horizontales
+        for y in range(GRID_ROWS):
+            pygame.draw.line(
+                surface,
+                LINE_COLOR,
+                (MARGIN_X, MARGIN_Y + y * CELL_SIZE),
+                (MARGIN_X + GRID_DIMENSIONS, MARGIN_Y + y * CELL_SIZE),
+                LINE_WIDTH_CENTER if y == GRID_ROWS // 2 else LINE_WIDTH_DEFAULT
+            )
+
+        # Ajouter les points "hoshi" sur le plateau
+        for px, py in HOSHI_POINTS:
+            pygame.draw.rect(
+                surface,
+                LINE_COLOR,
+                pygame.Rect(
+                    MARGIN_X + px * CELL_SIZE - HOSHI_POINTS_SIZE // 2,
+                    MARGIN_Y + py * CELL_SIZE - HOSHI_POINTS_SIZE // 2,
+                    HOSHI_POINTS_SIZE,
+                    HOSHI_POINTS_SIZE
+                )
+            )
+    except ValueError as ve:
+        raise ValueError(f"Erreur de validation : {ve}") from ve
+    except Exception as ex:
+        raise Exception(f"Erreur inattendue lors du dessin de la grille : {ex}") from ex
 
 
-def send_json(user_socket, json_message):
+def send_json(user_socket: socket.socket, json_message: str) -> None:
+    """
+    Envoie un message JSON via un socket utilisateur.
+
+    Args:
+        user_socket (socket.socket): Le socket à utiliser pour l'envoi.
+        json_message (str): Le message JSON à envoyer sous forme de chaîne.
+
+    Exceptions:
+        ValueError: Si le message JSON est invalide.
+        ConnectionError: Si une erreur de connexion survient lors de l'envoi.
+        Exception: Pour toute autre erreur inattendue.
+    """
     try:
-        print(f"Envoi du message :")
-        print(json.dumps(json.loads(json_message), indent=4))
-        user_socket.sendall(json_message.encode())
-    except Exception as e:
-        print(f"Erreur lors de l'envoi du message : {e}")
+        # Valide et formate le message JSON avant l'envoi
+        parsed_json = json.loads(json_message)  # Vérifie si le JSON est valide
+        print("Envoi du message JSON formaté :")
+        print(json.dumps(parsed_json, indent=4))  # Affiche le JSON sous une forme lisible pour le débogage
+
+        # Envoie le message via le socket
+        user_socket.sendall(json_message.encode('utf-8'))  # Encodage explicite en UTF-8
+
+    except json.JSONDecodeError as je:
+        raise ValueError(f"Le message fourni n'est pas un JSON valide : {je}") from je
+    except socket.error as se:
+        raise ConnectionError(f"Erreur de connexion lors de l'envoi du message : {se}") from se
+    except Exception as ex:
+        raise Exception(f"Erreur inattendue lors de l'envoi du message JSON : {ex}") from ex
 
 
-def receive_json(s):
+def receive_json(user_scocket: socket.socket) -> dict:
+    """
+    Reçoit un message JSON via un socket et le décode.
+
+    Args:
+        user_scocket (socket.socket): Le socket à utiliser pour recevoir les données.
+
+    Returns:
+        dict: Le message JSON décodé sous forme de dictionnaire.
+
+    Raises:
+        ConnectionError: Si aucune donnée n'est reçue ou si une erreur de connexion survient.
+        json.JSONDecodeError: Si le message reçu n'est pas un JSON valide.
+        Exception: Pour toute autre erreur inattendue.
+    """
     try:
-        data = s.recv(BUFFER_SIZE).decode("utf-8")
+        # Réception des données depuis le socket
+        data = user_scocket.recv(BUFFER_SIZE).decode("utf-8")
+
+        # Vérifie si des données ont été reçues
         if not data:
-            return None
+            raise ConnectionError("Aucune donnée reçue ou le socket est fermé.")
+
+        # Tente de charger les données en tant que JSON
         return json.loads(data)
-    except json.JSONDecodeError as e:
-        print(f"Erreur de décodage JSOn : {e}")
-        return None
+
+    except json.JSONDecodeError as jde:
+        raise json.JSONDecodeError(f"Erreur de décodage JSON : {jde.msg}", jde.doc, jde.pos) from jde
+    except socket.error as se:
+        raise ConnectionError(f"Erreur de connexion au socket : {se}") from se
     except Exception as e:
-        print(f"Erreur lors de la réception : {e}")
-        return None
+        raise Exception(f"Erreur inattendue lors de la réception des données : {e}") from e
 
 
-def connect_to_server(host, port):
-    user_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    user_socket.connect((host, port))
-    user_socket.setblocking(False)
-    print("Connecté au serveur.")
+def connect_to_server(host: str, port: int) -> socket.socket:
+    """
+    Établit une connexion avec un serveur via un socket.
 
-    return user_socket
+    Args:
+        host (str): L'adresse du serveur (nom d'hôte ou IP).
+        port (int): Le numéro de port du serveur.
+
+    Returns:
+        socket.socket: Le socket connecté au serveur.
+
+    Raises:
+        ConnectionError: Si la connexion au serveur échoue.
+        ValueError: Si le port ou l'hôte est invalide.
+        Exception: Pour toute autre erreur inattendue.
+    """
+    try:
+        # Création d'un socket TCP/IP
+        user_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Établit la connexion au serveur
+        user_socket.connect((host, port))
+
+        # Définit le socket en mode non bloquant
+        user_socket.setblocking(False)
+
+        print(f"Connecté au serveur {host}:{port}.")
+        return user_socket
+
+    except socket.gaierror as ge:
+        raise ValueError(f"Adresse du serveur invalide : {ge}") from ge
+    except socket.error as se:
+        raise ConnectionError(f"Échec de la connexion au serveur {host}:{port} : {se}") from se
+    except Exception as ex:
+        raise Exception(f"Erreur inattendue lors de la connexion au serveur : {ex}") from ex
 
 
 def create_play_move_json(x, y):
@@ -1141,8 +1398,8 @@ def handle_server_response(manager, user_socket, current_page_elements, current_
         # Afficher la réponse de manière lisible
         print("Réponse du serveur :")
         if response_json.get("type") == "alert_start_game":
-            print(f"type\": {response_json.get("type")}")
-            print(f"status\": {response_json.get("status")}")
+            print(f"type: {response_json.get('type')}")
+            print(f"status: {response_json.get('status')}")
             print(f"opponent_info: \n")
             print(response_json.get("opponent_info"))
             print_board(response_json.get("board"))
@@ -1611,7 +1868,7 @@ def handle_auth_response(response_json, current_page_elements, manager, user_soc
     clear_page(current_page_elements)
     lobby_page_elements = create_gui_elements_lobby_page(manager)
 
-    update_sound_button(lobby_page_elements["sound_button"])
+    update_sound_button(lobby_page_elements["sound_button"], sound_enabled)
 
     # Afficher les informations du JSON
     player_stats = response_json.get("player_stats", {})
@@ -1776,6 +2033,7 @@ def handle_events_on_game_page(manager, page_game_elements, user_socket):
 
 
 def handle_events_on_lobby_page(manager, lobby_page_elements, user_socket):
+    global sound_enabled
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False, None, None
@@ -1806,8 +2064,8 @@ def handle_events_on_lobby_page(manager, lobby_page_elements, user_socket):
                 send_json(user_socket, create_deconnection_json())
 
             elif event.ui_element == lobby_page_elements["sound_button"]:
-                toggle_sound()
-                update_sound_button(lobby_page_elements["sound_button"])
+                sound_enabled = toggle_sound(sound_enabled)
+                update_sound_button(lobby_page_elements["sound_button"], sound_enabled)
 
         manager.process_events(event)
 
