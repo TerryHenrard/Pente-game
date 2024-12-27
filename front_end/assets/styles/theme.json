@@ -234,5 +234,13 @@
     "misc": {
       "text_horiz_alignment": "left"
     }
+  },
+  "#total_active_players_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "left"
+    }
   }
 }

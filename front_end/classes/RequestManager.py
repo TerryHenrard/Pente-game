@@ -1,6 +1,11 @@
 import json
 import socket
 
+# pdoc: format de la documentation
+__docformat__ = "google"
+
+import select
+
 
 class RequestManager:
     """Classe utilitaire pour la création de chaînes JSON et les communications via un socket."""
@@ -44,7 +49,11 @@ class RequestManager:
         """
         return self._user_socket
 
-    def __connect_to_server(self, host: str, port: int) -> socket.socket:
+    def is_socket_ready(self, timeout: float = 0.001) -> bool:
+        return self._user_socket in select.select([self._user_socket], [], [], timeout)[0]
+
+    @staticmethod
+    def __connect_to_server(host: str, port: int) -> socket.socket:
         """
         Établit une connexion avec un serveur via un socket.
 
@@ -105,7 +114,7 @@ class RequestManager:
         except socket.error as se:
             raise ConnectionError(f"Erreur de connexion lors de l'envoi du message : {se}") from se
 
-    def receive_json(self) -> dict:
+    def receive_json(self) -> json:
         """
         Reçoit un message JSON via le socket et le décode.
 
@@ -323,7 +332,7 @@ class RequestManager:
             Exception: Si une erreur survient lors de la fermeture du socket
         """
         try:
-            print("Destruction de l'objet JsonRequestManager : fermeture du socket.")
+            print("Destruction de l'objet RequestManager : fermeture du socket.")
             self.close_socket()
         except Exception as ex:
             raise Exception(f"Erreur lors de la destruction de l'objet : {ex}") from ex

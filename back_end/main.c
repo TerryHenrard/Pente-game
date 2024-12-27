@@ -860,6 +860,7 @@ cJSON *create_get_lobby_response() {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "get_lobby_response");
     cJSON_AddNumberToObject(response, "status", success);
+    cJSON_AddNumberToObject(response, "total_active_players", active_connections);
 
     cJSON *games = cJSON_CreateArray();
     const game_node *current_game = head_linked_list_game;
@@ -944,9 +945,6 @@ cJSON *create_game_over_victory_response(const player_node *winner) {
     cJSON_AddStringToObject(response, "type", "game_over");
     cJSON_AddNumberToObject(response, "status", victory);
 
-    const char *board = winner->current_game ? winner->current_game->board : "";
-    cJSON_AddStringToObject(response, "board", board);
-
     cJSON *player_stats = create_player_stat_json(&winner->player_stats);
     cJSON_AddItemToObject(response, "player_stats", player_stats);
 
@@ -957,9 +955,6 @@ cJSON *create_game_over_defeat_response(const player_node *loser) {
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "type", "game_over");
     cJSON_AddNumberToObject(response, "status", defeat);
-
-    const char *board = loser->current_game ? loser->current_game->board : "";
-    cJSON_AddStringToObject(response, "board", board);
 
     cJSON *player_stats = create_player_stat_json(&loser->player_stats);
     cJSON_AddItemToObject(response, "player_stats", player_stats);

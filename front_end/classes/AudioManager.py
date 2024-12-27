@@ -15,6 +15,7 @@ class AudioManager:
         if not isinstance(sound_enabled, bool):
             raise TypeError("Le paramètre 'sound_enabled' doit être un booléen.")
 
+        pygame.mixer.init()
         self.sound_enabled = sound_enabled
 
     def toggle_sound(self) -> bool:
