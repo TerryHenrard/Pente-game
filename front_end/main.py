@@ -9,6 +9,7 @@ from classes.AudioManager import AudioManager
 from classes.GUIElementsManager import GUIElementsManager
 from classes.RequestManager import RequestManager
 
+# Prêt pour release 2.0.0
 # pdoc: format de la documentation
 __docformat__: str = "google"
 
