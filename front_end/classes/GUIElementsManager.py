@@ -1,10 +1,10 @@
-import json
-
 import pygame
 import pygame_gui
 
 # pdoc: format de la documentation
 __docformat__ = "google"
+
+from pygame_gui.elements import UIButton
 
 
 class GUIElementsManager:
@@ -112,6 +112,7 @@ class GUIElementsManager:
     OLD_BILBO_IMAGE = pygame.image.load("assets/images/old_bilbo.png")
     HOST_PION_IMAGE = pygame.image.load("assets/images/one_ring_pion.png")
     OPPONENT_PION_IMAGE = pygame.image.load("assets/images/eye_of_sauron_pion.png")
+    PENTE_LOGO = pygame.image.load("assets/images/pente-game-LOTR-LOGO.webp")
 
     # Redimensionner les images
     OPPONENT_PION_IMAGE_SCALED = pygame.transform.scale(OPPONENT_PION_IMAGE, (PIECE_SIZE, PIECE_SIZE))
@@ -149,7 +150,6 @@ class GUIElementsManager:
         )
         self.background = self.__create_background()
         self.screen = pygame.display.set_mode((GUIElementsManager.SCREEN_WIDTH, GUIElementsManager.SCREEN_HEIGHT))
-        pygame.display.set_caption("Plateau de Pente")
         self._board = ""
 
     @property
@@ -176,11 +176,19 @@ class GUIElementsManager:
         self._board = board
         self.print_board()
 
-    def print_board(self):
-        print("  " + " ".join(f"{x + 1:2}" for x in range(19)))
+    def print_board(self) -> None:
+        """
+        Affiche le plateau de jeu de manière lisible avec les numéros de colonnes et de lignes.
 
+        Returns:
+            None
+        """
+        # Affiche les numéros des colonnes en haut du plateau.
+        print("   " + " ".join(f"{x + 1:2}" for x in range(19)))
+
+        # Parcourt chaque ligne du plateau pour l'afficher avec son numéro.
         for y in range(19):
-            # Afficher le numéro de ligne suivi de la ligne elle-même
+            # Affiche le numéro de la ligne suivi des cases correspondantes.
             print(f"{y + 1:2} " + "  ".join(self.board[y * 19:(y + 1) * 19]))
 
     def process_events_manager(self, event: pygame.event.Event) -> None:
@@ -233,7 +241,8 @@ class GUIElementsManager:
 
             # Crée une fenêtre de jeu
             screen = pygame.display.set_mode((GUIElementsManager.SCREEN_WIDTH, GUIElementsManager.SCREEN_HEIGHT))
-            pygame.display.set_caption("Jeu de Pente")
+            pygame.display.set_caption("Pente Game / LOTR Edition")
+            pygame.display.set_icon(GUIElementsManager.PENTE_LOGO)
 
             return screen
         except Exception as e:
@@ -258,24 +267,39 @@ class GUIElementsManager:
         background.fill(GUIElementsManager.BACKGROUND_COLOR)
         return background
 
-    def draw_host_pion_logo(self):
+    def draw_host_pion_logo(self) -> pygame_gui.elements.UIImage:
+        """
+        Dessine le logo du pion de l'hôte sur l'interface utilisateur.
+
+        Returns:
+            pygame_gui.elements.UIImage: L'élément graphique représentant le logo du pion de l'hôte.
+        """
+        # Crée et retourne un élément UIImage pour afficher le logo du pion de l'hôte.
         return pygame_gui.elements.UIImage(
             relative_rect=pygame.Rect(
-                (GUIElementsManager.HOST_PION_LOGO_X, GUIElementsManager.HOST_PION_LOGO_Y),
-                (GUIElementsManager.HOST_PION_LOGO_WIDTH, GUIElementsManager.HOST_PION_LOGO_HEIGHT)
+                (GUIElementsManager.HOST_PION_LOGO_X, GUIElementsManager.HOST_PION_LOGO_Y),  # Position du logo.
+                (GUIElementsManager.HOST_PION_LOGO_WIDTH, GUIElementsManager.HOST_PION_LOGO_HEIGHT)  # Taille du logo.
             ),
-            image_surface=GUIElementsManager.HOST_PION_IMAGE,
-            manager=self.manager
+            image_surface=GUIElementsManager.HOST_PION_IMAGE,  # Image utilisée pour le logo.
+            manager=self.manager  # Gestionnaire d'interface utilisateur.
         )
 
-    def draw_opponent_pion_logo(self):
+    def draw_opponent_pion_logo(self) -> pygame_gui.elements.UIImage:
+        """
+        Dessine le logo du pion de l'adversaire sur l'interface utilisateur.
+
+        Returns:
+            pygame_gui.elements.UIImage: L'élément graphique représentant le logo du pion de l'adversaire.
+        """
+        # Crée et retourne un élément UIImage pour afficher le logo du pion de l'adversaire.
         return pygame_gui.elements.UIImage(
             relative_rect=pygame.Rect(
-                (GUIElementsManager.OPPONENT_PION_LOGO_X, GUIElementsManager.OPPONENT_PION_LOGO_Y),
+                (GUIElementsManager.OPPONENT_PION_LOGO_X, GUIElementsManager.OPPONENT_PION_LOGO_Y),  # Position du logo.
                 (GUIElementsManager.OPPONENT_PION_LOGO_WIDTH, GUIElementsManager.OPPONENT_PION_LOGO_HEIGHT)
+                # Taille du logo.
             ),
-            image_surface=GUIElementsManager.OPPONENT_PION_IMAGE,
-            manager=self.manager
+            image_surface=GUIElementsManager.OPPONENT_PION_IMAGE,  # Image utilisée pour le logo.
+            manager=self.manager  # Gestionnaire d'interface utilisateur.
         )
 
     def draw_pion(
@@ -305,37 +329,73 @@ class GUIElementsManager:
             manager=self.manager
         )
 
-    def __add_padding(self, text, total_length=20, align="left", padding_char=" "):
+    @staticmethod
+    def __add_padding(
+            text: str,
+            total_length: int = 20,
+            align: str = "left",
+            padding_char: str = " "
+    ) -> str:
         """
-        Ajuste le texte pour qu'il ait exactement total_length caractères.
+        Ajuste une chaîne de caractères pour qu'elle atteigne une longueur spécifique
+        en ajoutant du padding, avec alignement défini.
 
-        :param text: La chaîne à ajuster.
-        :param total_length: La longueur totale désirée.
-        :param align: L'alignement du texte ("left", "right", "center").
-        :param padding_char: Le caractère utilisé pour le padding.
-        :return: La chaîne ajustée ou tronquée.
+        Args:
+            text (str): La chaîne de caractères à ajuster.
+            total_length (int): La longueur totale souhaitée pour la chaîne. Par défaut, 20.
+            align (str): L'alignement du texte. Valeurs possibles : "left", "right", "center".
+            padding_char (str): Le caractère utilisé pour remplir les espaces vides. Par défaut, un espace.
+
+        Returns:
+            str: La chaîne ajustée ou tronquée selon la longueur spécifiée.
+
+        Raises:
+            ValueError: Si l'argument `align` n'est pas "left", "right" ou "center".
         """
-        text = str(text).strip()  # Supprime les espaces inutiles
+        # Supprime les espaces inutiles au début et à la fin du texte.
+        text = str(text).strip()
+
+        # Tronque la chaîne si elle dépasse la longueur totale.
         if len(text) > total_length:
-            return text[:total_length]  # Tronque si trop long
-        elif align == "left":
+            return text[:total_length]
+
+        # Ajuste la chaîne en fonction de l'alignement demandé.
+        if align == "left":
             return text.ljust(total_length, padding_char)
         elif align == "right":
             return text.rjust(total_length, padding_char)
         elif align == "center":
             return text.center(total_length, padding_char)
         else:
-            raise ValueError("align doit être 'left', 'right' ou 'center'")
+            # Erreur si l'alignement spécifié est invalide.
+            raise ValueError("L'argument 'align' doit être 'left', 'right' ou 'center'.")
 
-    def create_gui_join_game_button_element(self, game_json: json, index: int):
-        game_button_id = game_json.get("id", None)
-        game_button_name = game_json.get("name", None)
-        game_button_players = game_json.get("players", None)
-        game_button_status = game_json.get("status", None)  # waiting 0 / ongoing 1
+    def create_gui_join_game_button_element(self, game_json: dict, index: int) -> UIButton | None:
+        """
+        Crée un bouton graphique pour rejoindre une partie, basé sur les informations fournies.
 
+        Args:
+            game_json (dict): Un dictionnaire contenant les informations sur la partie.
+                - id (int): L'identifiant de la partie.
+                - name (str): Le nom de la partie.
+                - players (list[str]): La liste des joueurs dans la partie.
+                - status (int): Le statut de la partie (0 pour "waiting", 1 pour "ongoing").
+            index (int): L'index du bouton (utilisé pour positionner verticalement les boutons).
+
+        Returns:
+            pygame_gui.elements.UIButton | None: Le bouton créé, ou None si les données du bouton sont incomplètes.
+        """
+        # Récupère les données nécessaires depuis game_json.
+        game_button_id = game_json.get("id")
+        game_button_name = game_json.get("name")
+        game_button_players = game_json.get("players")
+        game_button_status = game_json.get("status")  # 0: waiting, 1: ongoing
+
+        # Vérifie si toutes les données nécessaires sont présentes.
         if None in [game_button_id, game_button_name, game_button_players, game_button_status]:
             return None
 
+        # Crée le texte affiché sur le bouton avec un alignement personnalisé.
         button_text = (
                 self.__add_padding(f"N°{index + 1}", total_length=7) +
                 self.__add_padding(f"Name: {game_button_name}", total_length=20) +
@@ -343,58 +403,94 @@ class GUIElementsManager:
                 self.__add_padding(f"Players: {', '.join(game_button_players)}", total_length=30)
         )
 
+        # Retourne un bouton pygame_gui avec les dimensions et le texte spécifiés.
         return pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(
                 (
                     GUIElementsManager.SCREEN_WIDTH // 2 - (GUIElementsManager.BUTTON_GAME_WIDTH // 2),
-                    (100 + (GUIElementsManager.BUTTON_GAME_HEIGHT * index) + 10)
+                    # Position horizontale.
+                    (100 + (GUIElementsManager.BUTTON_GAME_HEIGHT * index) + 10)  # Position verticale.
                 ),
-                (GUIElementsManager.BUTTON_GAME_WIDTH, GUIElementsManager.BUTTON_GAME_HEIGHT)
+                (GUIElementsManager.BUTTON_GAME_WIDTH, GUIElementsManager.BUTTON_GAME_HEIGHT)  # Dimensions du bouton.
             ),
-            text=button_text,
-            manager=self.manager,
-            object_id=f"#button_game_{game_button_id}"
+            text=button_text,  # Texte affiché sur le bouton.
+            manager=self.manager,  # Gestionnaire d'interface.
+            object_id=f"#button_game_{game_button_id}"  # Identifiant unique du bouton.
         )
 
     @staticmethod
-    def get_grid_coordinates(x, y):
-        # Ajustement avec les décalages
+    def get_grid_coordinates(x: int, y: int) -> tuple[int, int]:
+        """
+        Convertit les coordonnées d'un clic en indices de la grille.
+
+        Args:
+            x (int): La position horizontale du clic en pixels.
+            y (int): La position verticale du clic en pixels.
+
+        Returns:
+            tuple[int, int]: Un tuple contenant les indices (colonne, ligne) de la grille.
+                Retourne (-1, -1) si le clic est en dehors des limites de la grille.
+        """
+        # Ajustement des coordonnées en prenant en compte les marges.
         adjusted_x = x - GUIElementsManager.MARGIN_X
         adjusted_y = y - GUIElementsManager.MARGIN_Y
 
-        # Vérifie si le clic est dans la zone étendue avec tolérance
+        # Vérifie si le clic est dans la zone étendue avec une tolérance.
         if not (
                 -GUIElementsManager.TOLERANCE <= adjusted_x <= GUIElementsManager.GRID_DIMENSIONS + GUIElementsManager.TOLERANCE and
                 -GUIElementsManager.TOLERANCE <= adjusted_y <= GUIElementsManager.GRID_DIMENSIONS + GUIElementsManager.TOLERANCE
         ):
-            return -1, -1
+            return -1, -1  # Clic en dehors de la zone.
 
-        # Calcul des indices de la grille
+        # Calcul des indices de la grille en fonction de la taille des cellules.
         col = round(adjusted_x / GUIElementsManager.CELL_SIZE)
         row = round(adjusted_y / GUIElementsManager.CELL_SIZE)
 
-        # Vérifie si les indices sont dans les limites de la grille
+        # Vérifie si les indices calculés sont dans les limites de la grille.
         if not (0 <= col < GUIElementsManager.GRID_COLS and 0 <= row < GUIElementsManager.GRID_ROWS):
-            return -1, -1
+            return -1, -1  # Indices hors limites.
 
+        # Retourne les indices valides (colonne, ligne).
         return col, row
 
     @staticmethod
     def clear_page(elements: dict[str, pygame_gui.elements]) -> None:
+        """
+        Supprime tous les éléments graphiques d'une page et vide le dictionnaire d'éléments.
+
+        Args:
+            elements (dict[str, pygame_gui.elements]):
+                Un dictionnaire contenant les éléments graphiques de la page à supprimer.
+
+        Returns:
+            None
+        """
+        # Parcourt tous les éléments du dictionnaire.
         for key, element in elements.items():
+            # Si l'élément est une liste, tente de supprimer chaque sous-élément.
             if isinstance(element, list):
                 for sub_element in element:
                     if hasattr(sub_element, "kill"):
-                        sub_element.kill()
+                        sub_element.kill()  # Supprime l'élément graphique.
+            # Si l'élément individuel possède une méthode kill(), la déclenche.
             elif hasattr(element, "kill"):
                 element.kill()
+            # Avertit si l'élément n'a pas de méthode kill().
             else:
-                print(f"Warning: Element {element} has no kill() method.")
+                print(f"Warning: Element {element} n'a pas de méthode kill().")
 
+        # Vide le dictionnaire après avoir supprimé les éléments graphiques.
         elements.clear()
 
-    def create_gui_elements_lobby_page(self):
+    def create_gui_elements_lobby_page(self) -> dict[str, pygame_gui.elements]:
+        """
+        Crée et retourne les éléments graphiques nécessaires pour la page du lobby.
+
+        Returns:
+            dict[str, pygame_gui.elements]: Un dictionnaire contenant tous les éléments de l'interface utilisateur pour la page du lobby.
+        """
         return {
+            # Titre principal de la page.
             "title_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
@@ -407,6 +503,8 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id='#lobby_title_label'
             ),
+
+            # Étiquettes pour les statistiques des joueurs.
             "score_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (GUIElementsManager.LABEL_LEFT_MARGIN, GUIElementsManager.BUTTON_BETWEEN_MARGIN),
@@ -444,8 +542,8 @@ class GUIElementsManager:
                 relative_rect=pygame.Rect(
                     (
                         GUIElementsManager.LABEL_LEFT_MARGIN,
-                        3 * (GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) - (
-                                GUIElementsManager.BUTTON_BETWEEN_MARGIN // 2)
+                        3 * (GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) -
+                        (GUIElementsManager.BUTTON_BETWEEN_MARGIN // 2)
                     ),
                     (GUIElementsManager.LABEL_WIDTH, GUIElementsManager.LABEL_HEIGHT)
                 ),
@@ -458,7 +556,8 @@ class GUIElementsManager:
                     (
                         GUIElementsManager.LABEL_LEFT_MARGIN,
                         4 * (
-                                GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) - GUIElementsManager.BUTTON_BETWEEN_MARGIN
+                                GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN
+                        ) - GUIElementsManager.BUTTON_BETWEEN_MARGIN
                     ),
                     (GUIElementsManager.LABEL_WIDTH, GUIElementsManager.LABEL_HEIGHT)
                 ),
@@ -466,9 +565,10 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id="#games_played_label"
             ),
+
+            # Images décoratives.
             "young_bilbo_image": pygame_gui.elements.UIImage(
-                relative_rect=pygame
-                .Rect(
+                relative_rect=pygame.Rect(
                     (GUIElementsManager.YOUNG_BILBO_IMAGE_X, GUIElementsManager.YOUNG_BILBO_IMAGE_Y),
                     (GUIElementsManager.YOUNG_BILBO_IMAGE_WIDTH, GUIElementsManager.YOUNG_BILBO_IMAGE_HEIGHT)
                 ),
@@ -476,19 +576,21 @@ class GUIElementsManager:
                 manager=self.manager
             ),
             "old_bilbo_image": pygame_gui.elements.UIImage(
-                relative_rect=pygame
-                .Rect(
+                relative_rect=pygame.Rect(
                     (GUIElementsManager.OLD_BILBO_IMAGE_X, GUIElementsManager.OLD_BILBO_IMAGE_Y),
                     (GUIElementsManager.OLD_BILBO_IMAGE_WIDTH, GUIElementsManager.OLD_BILBO_IMAGE_HEIGHT)
                 ),
                 image_surface=GUIElementsManager.OLD_BILBO_IMAGE,
                 manager=self.manager
             ),
+
+            # Boutons d'action.
             "create_game_button": pygame_gui.elements.UIButton(
                 relative_rect=pygame.Rect(
                     (
-                        GUIElementsManager.SCREEN_WIDTH // 2 - ((
-                                                                        3 * GUIElementsManager.BUTTON_WIDTH) // 2) - GUIElementsManager.BUTTON_LEFT_RIGHT_MARGIN,
+                        GUIElementsManager.SCREEN_WIDTH // 2 - (
+                                3 * GUIElementsManager.BUTTON_WIDTH // 2
+                        ) - GUIElementsManager.BUTTON_LEFT_RIGHT_MARGIN,
                         GUIElementsManager.SCREEN_HEIGHT - GUIElementsManager.BUTTON_BOTTOM_MARGIN
                     ),
                     (GUIElementsManager.BUTTON_WIDTH, GUIElementsManager.BUTTON_HEIGHT)
@@ -511,7 +613,8 @@ class GUIElementsManager:
                 relative_rect=pygame.Rect(
                     (
                         GUIElementsManager.SCREEN_WIDTH // 2 + (
-                                GUIElementsManager.BUTTON_WIDTH // 2) + GUIElementsManager.BUTTON_LEFT_RIGHT_MARGIN,
+                                GUIElementsManager.BUTTON_WIDTH // 2
+                        ) + GUIElementsManager.BUTTON_LEFT_RIGHT_MARGIN,
                         GUIElementsManager.SCREEN_HEIGHT - GUIElementsManager.BUTTON_BOTTOM_MARGIN
                     ),
                     (GUIElementsManager.BUTTON_WIDTH, GUIElementsManager.BUTTON_HEIGHT)
@@ -519,6 +622,8 @@ class GUIElementsManager:
                 text="Se déconnecter",
                 manager=self.manager
             ),
+
+            # Étiquettes supplémentaires.
             "error_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (GUIElementsManager.SCREEN_WIDTH // 2 - 200, GUIElementsManager.SCREEN_HEIGHT // 2 + 120),
@@ -544,7 +649,8 @@ class GUIElementsManager:
                     (
                         GUIElementsManager.LABEL_LEFT_MARGIN,
                         5 * (
-                                GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) - GUIElementsManager.BUTTON_BETWEEN_MARGIN
+                                GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN
+                        ) - GUIElementsManager.BUTTON_BETWEEN_MARGIN
                     ),
                     (GUIElementsManager.LABEL_WIDTH, GUIElementsManager.LABEL_HEIGHT)
                 ),
@@ -554,8 +660,15 @@ class GUIElementsManager:
             )
         }
 
-    def create_gui_elements_create_game_page(self):
+    def create_gui_elements_create_game_page(self) -> dict[str, pygame_gui.elements]:
+        """
+        Crée et retourne les éléments graphiques nécessaires pour la page de création d'une nouvelle partie.
+
+        Returns:
+            dict[str, pygame_gui.elements]: Un dictionnaire contenant tous les éléments de l'interface utilisateur pour la page de création d'une partie.
+        """
         return {
+            # Titre principal de la page.
             "title_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
@@ -568,9 +681,10 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id='#new_game_title_label'
             ),
+
+            # Images décoratives.
             "nazgul_image": pygame_gui.elements.UIImage(
-                relative_rect=pygame
-                .Rect(
+                relative_rect=pygame.Rect(
                     (GUIElementsManager.NAZGUL_IMAGE_X, GUIElementsManager.NAZGUL_IMAGE_Y),
                     (GUIElementsManager.NAZGUL_IMAGE_WIDTH, GUIElementsManager.NAZGUL_IMAGE_HEIGHT)
                 ),
@@ -578,8 +692,7 @@ class GUIElementsManager:
                 manager=self.manager
             ),
             "king_witch_of_angmar_image": pygame_gui.elements.UIImage(
-                relative_rect=pygame
-                .Rect(
+                relative_rect=pygame.Rect(
                     (GUIElementsManager.KING_WITCH_OF_ANGMAR_IMAGE_X, GUIElementsManager.KING_WITCH_OF_ANGMAR_IMAGE_Y),
                     (GUIElementsManager.KING_WITCH_OF_ANGMAR_IMAGE_WIDTH,
                      GUIElementsManager.KING_WITCH_OF_ANGMAR_IMAGE_HEIGHT)
@@ -587,6 +700,8 @@ class GUIElementsManager:
                 image_surface=GUIElementsManager.KING_WITCH_OF_ANGMAR_IMAGE,
                 manager=self.manager
             ),
+
+            # Label et champ de texte pour le nom de la partie.
             "game_name_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
@@ -610,6 +725,8 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id="#game_name_entry"
             ),
+
+            # Boutons pour créer une partie ou retourner au menu précédent.
             "create_new_game_button": pygame_gui.elements.UIButton(
                 relative_rect=pygame.Rect(
                     (
@@ -632,6 +749,8 @@ class GUIElementsManager:
                 text="Retour",
                 manager=self.manager
             ),
+
+            # Label pour afficher les erreurs éventuelles.
             "error_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (GUIElementsManager.SCREEN_WIDTH // 2 - 150, GUIElementsManager.SCREEN_HEIGHT // 2 + 155),
@@ -641,11 +760,17 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id="#error_label"
             )
-
         }
 
-    def create_gui_elements_login_page(self):
+    def create_gui_elements_login_page(self) -> dict[str, pygame_gui.elements]:
+        """
+        Crée et retourne les éléments graphiques nécessaires pour la page de connexion.
+
+        Returns:
+            dict[str, pygame_gui.elements]: Un dictionnaire contenant tous les éléments de l'interface utilisateur pour la page de connexion.
+        """
         return {
+            # Titre principal de la page.
             "title_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
@@ -658,9 +783,10 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id='#login_title_label'
             ),
+
+            # Images décoratives.
             "gandalf_image": pygame_gui.elements.UIImage(
-                relative_rect=pygame
-                .Rect(
+                relative_rect=pygame.Rect(
                     (GUIElementsManager.GANDALF_IMAGE_X, GUIElementsManager.GANDALF_IMAGE_Y),
                     (GUIElementsManager.GANDALF_IMAGE_WIDTH, GUIElementsManager.GANDALF_IMAGE_HEIGHT)
                 ),
@@ -668,14 +794,15 @@ class GUIElementsManager:
                 manager=self.manager
             ),
             "sauron_image": pygame_gui.elements.UIImage(
-                relative_rect=pygame
-                .Rect(
+                relative_rect=pygame.Rect(
                     (GUIElementsManager.SAURON_IMAGE_X, GUIElementsManager.SAURON_IMAGE_Y),
                     (GUIElementsManager.SAURON_IMAGE_WIDTH, GUIElementsManager.SAURON_IMAGE_HEIGHT)
                 ),
                 image_surface=GUIElementsManager.SAURON_IMAGE,
                 manager=self.manager
             ),
+
+            # Labels et champs de texte pour le nom d'utilisateur et le mot de passe.
             "username_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (GUIElementsManager.SCREEN_WIDTH // 2 - 100, GUIElementsManager.SCREEN_HEIGHT // 2 - 115),
@@ -710,6 +837,8 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id="#password_login_entry"
             ),
+
+            # Boutons pour se connecter ou créer un compte.
             "login_button": pygame_gui.elements.UIButton(
                 relative_rect=pygame.Rect(
                     (GUIElementsManager.SCREEN_WIDTH // 2 - 100, GUIElementsManager.SCREEN_HEIGHT // 2 + 25),
@@ -726,6 +855,8 @@ class GUIElementsManager:
                 text="Créer un compte",
                 manager=self.manager
             ),
+
+            # Label pour afficher les erreurs éventuelles.
             "error_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (GUIElementsManager.SCREEN_WIDTH // 2 - 300, GUIElementsManager.SCREEN_HEIGHT // 2 + 155),
@@ -737,8 +868,15 @@ class GUIElementsManager:
             )
         }
 
-    def create_gui_elements_new_account_page(self):
+    def create_gui_elements_new_account_page(self) -> dict[str, pygame_gui.elements]:
+        """
+        Crée et retourne les éléments graphiques nécessaires pour la page de création d'un nouveau compte.
+
+        Returns:
+            dict[str, pygame_gui.elements]: Un dictionnaire contenant tous les éléments de l'interface utilisateur pour la page de création d'un compte.
+        """
         return {
+            # Titre principal de la page.
             "title_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
@@ -751,6 +889,8 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id='#new_account_title_label'
             ),
+
+            # Labels et champs de texte pour le nom d'utilisateur, le mot de passe et la confirmation.
             "username_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (GUIElementsManager.SCREEN_WIDTH // 2 - 100, GUIElementsManager.SCREEN_HEIGHT // 2 - 115),
@@ -802,15 +942,18 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id="#conf_password_create_account_entry"
             ),
+
+            # Image décorative de Gollum.
             "gollum_image": pygame_gui.elements.UIImage(
-                relative_rect=pygame
-                .Rect(
+                relative_rect=pygame.Rect(
                     (GUIElementsManager.GOLLUM_IMAGE_X, GUIElementsManager.GOLLUM_IMAGE_Y),
                     (GUIElementsManager.GOLLUM_IMAGE_WIDTH, GUIElementsManager.GOLLUM_IMAGE_HEIGHT)
                 ),
                 image_surface=GUIElementsManager.GOLLUM_IMAGE,
                 manager=self.manager
             ),
+
+            # Boutons pour créer un compte ou retourner au menu précédent.
             "create_button": pygame_gui.elements.UIButton(
                 relative_rect=pygame.Rect(
                     (GUIElementsManager.SCREEN_WIDTH // 2 - 100, GUIElementsManager.SCREEN_HEIGHT // 2 + 75),
@@ -827,6 +970,8 @@ class GUIElementsManager:
                 text="Retour",
                 manager=self.manager
             ),
+
+            # Label pour afficher les erreurs éventuelles.
             "error_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (GUIElementsManager.SCREEN_WIDTH // 2 - 300, GUIElementsManager.SCREEN_HEIGHT // 2 + 195),
@@ -838,8 +983,16 @@ class GUIElementsManager:
             )
         }
 
-    def create_gui_elements_game_page(self):
+    def create_gui_elements_game_page(self) -> dict[str, pygame_gui.elements]:
+        """
+        Crée et retourne les éléments graphiques nécessaires pour la page de jeu.
+
+        Returns:
+            dict[str, pygame_gui.elements]:
+                Un dictionnaire contenant tous les éléments de l'interface utilisateur pour la page de jeu.
+        """
         return {
+            # Titre principal de la page.
             "title_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
@@ -852,6 +1005,8 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id='#new_join_game_title_label'
             ),
+
+            # Label pour afficher les erreurs.
             "error_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (10, 10),
@@ -861,6 +1016,8 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id="#error_label_on_game_page"
             ),
+
+            # Informations sur les joueurs.
             "player1_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
@@ -887,6 +1044,8 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id="#player2_label"
             ),
+
+            # Bouton pour quitter la partie.
             "quit_button": pygame_gui.elements.UIButton(
                 relative_rect=pygame.Rect(
                     (
@@ -899,6 +1058,8 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id="#quit_button"
             ),
+
+            # Statistiques du joueur local.
             "score_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
@@ -939,21 +1100,21 @@ class GUIElementsManager:
                 relative_rect=pygame.Rect(
                     (
                         GUIElementsManager.LABEL_LEFT_MARGIN,
-                        3 * (GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) - (
-                                GUIElementsManager.BUTTON_BETWEEN_MARGIN // 2) + 100
+                        3 * (GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) -
+                        (GUIElementsManager.BUTTON_BETWEEN_MARGIN // 2) + 100
                     ),
                     (GUIElementsManager.LABEL_WIDTH, GUIElementsManager.LABEL_HEIGHT)
                 ),
-                text="losses_label",
+                text="forfeits_label",
                 manager=self.manager,
-                object_id="#losses_label"
+                object_id="#forfeits_label"
             ),
             "games_played_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
                         GUIElementsManager.LABEL_LEFT_MARGIN,
-                        4 * (GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) - (
-                                GUIElementsManager.BUTTON_BETWEEN_MARGIN // 2) + 90
+                        4 * (GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) -
+                        (GUIElementsManager.BUTTON_BETWEEN_MARGIN // 2) + 90
                     ),
                     (GUIElementsManager.LABEL_WIDTH, GUIElementsManager.LABEL_HEIGHT)
                 ),
@@ -961,6 +1122,8 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id="#games_played_label"
             ),
+
+            # Statistiques de l'adversaire.
             "opponent_score_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
@@ -1001,21 +1164,21 @@ class GUIElementsManager:
                 relative_rect=pygame.Rect(
                     (
                         GUIElementsManager.SCREEN_WIDTH - GUIElementsManager.LABEL_LEFT_MARGIN - GUIElementsManager.LABEL_WIDTH,
-                        3 * (GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) - (
-                                GUIElementsManager.BUTTON_BETWEEN_MARGIN // 2) + 100
+                        3 * (GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) -
+                        (GUIElementsManager.BUTTON_BETWEEN_MARGIN // 2) + 100
                     ),
                     (GUIElementsManager.LABEL_WIDTH, GUIElementsManager.LABEL_HEIGHT)
                 ),
                 text="",
                 manager=self.manager,
-                object_id="#opponent_losses_label"
+                object_id="#opponent_forfeits_label"
             ),
             "opponent_games_played_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
                         GUIElementsManager.SCREEN_WIDTH - GUIElementsManager.LABEL_LEFT_MARGIN - GUIElementsManager.LABEL_WIDTH,
-                        4 * (GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) - (
-                                GUIElementsManager.BUTTON_BETWEEN_MARGIN // 2) + 90
+                        4 * (GUIElementsManager.LABEL_HEIGHT + GUIElementsManager.BUTTON_BETWEEN_MARGIN) -
+                        (GUIElementsManager.BUTTON_BETWEEN_MARGIN // 2) + 90
                     ),
                     (GUIElementsManager.LABEL_WIDTH, GUIElementsManager.LABEL_HEIGHT)
                 ),
@@ -1023,17 +1186,22 @@ class GUIElementsManager:
                 manager=self.manager,
                 object_id="#opponent_games_played_label"
             ),
+
+            # Instructions pour le joueur.
             "instruction_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (
                         GUIElementsManager.SCREEN_WIDTH - GUIElementsManager.LABEL_LEFT_MARGIN - GUIElementsManager.LABEL_WIDTH,
-                        10),
+                        10
+                    ),
                     (GUIElementsManager.LABEL_WIDTH, 30)
                 ),
                 text="",
                 manager=self.manager,
                 object_id="#instruction_label_on_game_page"
             ),
+
+            # Affichage des captures.
             "captures_label": pygame_gui.elements.UILabel(
                 relative_rect=pygame.Rect(
                     (10, GUIElementsManager.SCREEN_HEIGHT // 2 + 30),

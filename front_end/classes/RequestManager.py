@@ -127,13 +127,15 @@ class RequestManager:
         """
         try:
             # Réception des données depuis le socket
-            data = self.get_user_socket().recv(self.buffer_size).decode("utf-8")
+            data = self._user_socket.recv(self.buffer_size).decode("utf-8")
 
             # Vérifie si des données ont été reçues
             if not data:
                 raise ConnectionError("Aucune donnée reçue ou le socket est fermé.")
 
             # Tente de charger les données en tant que JSON
+            print("Réception de données JSON :")
+            print(json.dumps(json.loads(data), indent=4))
             return json.loads(data)
 
         except json.JSONDecodeError as jde:

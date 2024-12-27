@@ -195,6 +195,14 @@
       "text_horiz_alignment": "right"
     }
   },
+  "#opponent_forfeits_label": {
+    "font": {
+      "size": 18
+    },
+    "misc": {
+      "text_horiz_alignment": "right"
+    }
+  },
   "#button_game_0": {
     "normal_text": "#FFFFFF",
     "hovered_text": "#FFFFE0",
