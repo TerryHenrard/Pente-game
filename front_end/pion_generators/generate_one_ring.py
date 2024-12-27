@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+# pdoc: format de la documentation
+__docformat__ = "google"
+
 
 # Création d'une image représentant l'Anneau Unique stylisé
 def generate_one_ring():

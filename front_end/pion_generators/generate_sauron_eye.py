@@ -1,6 +1,9 @@
 from matplotlib import pyplot as plt
 from matplotlib.patches import Ellipse
 
+# pdoc: format de la documentation
+__docformat__ = "google"
+
 
 def generate_eye_of_sauron_ellipses():
     # Configuration de l'image
